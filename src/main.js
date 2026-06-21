@@ -7,6 +7,8 @@ import { WorldView } from './world.js';
 import { Game } from './game.js';
 import { CameraRig } from './camera.js';
 import { UI } from './ui.js';
+import { TECHS, availableTechs } from './tech.js';
+import { BUILDINGS } from './buildings.js';
 
 const MAP_RADIUS = 12;
 
@@ -84,6 +86,7 @@ const camRig = new CameraRig(camera, renderer.domElement, MAP_RADIUS * 1.7);
 const raycaster = new THREE.Raycaster();
 const ndc = new THREE.Vector2();
 let selected = null;
+let selectedCity = null;
 let reachMap = new Map();
 
 function tileUnderPointer(ev) {
@@ -97,6 +100,7 @@ function tileUnderPointer(ev) {
 
 function selectUnit(u) {
   selected = u;
+  selectedCity = null;
   reachMap = game.reachableFor(u);
   view.selectTile(u.q, u.r);
   refreshUnitPanel();
@@ -105,10 +109,62 @@ function selectUnit(u) {
 
 function deselect() {
   selected = null;
+  selectedCity = null;
   reachMap = new Map();
   view.deselect();
   view.clearHighlights();
   ui.hideSelection();
+}
+
+function selectCity(c) {
+  selected = null;
+  reachMap = new Map();
+  view.clearHighlights();
+  selectedCity = c;
+  view.selectTile(c.q, c.r);
+  refreshCityPanel();
+}
+
+// Build the city-management model + its build/research buttons.
+function refreshCityPanel() {
+  const c = selectedCity;
+  if (c.owner !== 0) { ui.showCity({ name: c.name, you: false, population: c.population, growth: { have: Math.floor(c.food), need: c.population * 10 } }); return; }
+
+  const civ = game.civs[0];
+  const researched = civ.research.researched;
+
+  let producing = null;
+  const queue = [];
+  c.queue.forEach((it, i) => {
+    const turns = game.turnsFor(c, it.cost, i === 0);
+    if (i === 0) producing = { name: it.name, turns };
+    else queue.push({ name: it.name, turns });
+  });
+
+  const research = civ.research.current
+    ? { name: TECHS[civ.research.current].name, detail: `${Math.floor(civ.treasury.science)}/${TECHS[civ.research.current].cost}` }
+    : { name: 'None', detail: `${Math.floor(civ.treasury.science)} banked` };
+
+  const model = {
+    name: c.name, you: true, population: c.population,
+    growth: { have: Math.floor(c.food), need: c.population * 10 },
+    yields: game.cityYields(c), producing, queue, research,
+    buildings: [...c.buildings].map(id => BUILDINGS[id].name),
+  };
+
+  const actions = [];
+  const queuedBuildings = new Set(c.queue.filter(i => i.kind === 'building').map(i => i.id));
+  for (const item of game.buildOptions(0)) {
+    if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
+    const turns = game.turnsFor(c, item.cost, false);
+    actions.push({ label: `⚒ ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
+  }
+  for (const id of availableTechs(researched)) {
+    if (id === civ.research.current) continue;
+    actions.push({ label: `🔬 ${TECHS[id].name} (${TECHS[id].cost})`, enabled: true, onClick: () => { game.setResearch(0, id); refreshCityPanel(); ui.refreshTopbar(game); } });
+  }
+  actions.push({ label: 'Close', enabled: true, onClick: deselect });
+  ui.showCity(model, actions);
 }
 
 function refreshUnitPanel() {
@@ -118,7 +174,7 @@ function refreshUnitPanel() {
       label: 'Found City', enabled: selected.move > 0 && !game.cityAt(selected.q, selected.r),
       onClick: () => {
         const res = game.foundCity(selected);
-        if (res.ok) { ui.toast(`${res.city.name} founded!`, '#7fd17f'); game.income = game.computeIncome(); ui.refreshTopbar(game); deselect(); }
+        if (res.ok) { ui.toast(`${res.city.name} founded!`, '#7fd17f'); game.income = game.computeIncome(); ui.refreshTopbar(game); selectCity(res.city); }
         else ui.toast(res.msg, '#e88');
       },
     });
@@ -167,6 +223,13 @@ function handleClick(ev) {
     return;
   }
 
+  // Click your own city (when not directing a unit's move) to manage it.
+  const ownCity = game.cityAt(q, r);
+  if (ownCity && ownCity.owner === 0 && (!selected || selected.isMoving)) {
+    selectCity(ownCity);
+    return;
+  }
+
   if (selected && selected.owner === 0 && !selected.isMoving) {
     const res = game.tryMoveUnit(selected, q, r);
     if (res.ok) {
@@ -184,8 +247,10 @@ function handleClick(ev) {
 
   // Nothing actionable: show info about whatever is here.
   const city = game.cityAt(q, r);
-  if (city && game.explored.has(key(q, r))) ui.showCity(city);
-  else ui.showTile(tile);
+  if (city && game.explored.has(key(q, r))) {
+    if (city.owner === 0) selectCity(city);
+    else ui.showCity({ name: city.name, you: false, population: city.population, growth: { have: Math.floor(city.food), need: city.population * 10 } });
+  } else ui.showTile(tile);
 }
 
 // --- turns -------------------------------------------------------------------
@@ -193,8 +258,11 @@ function endTurn() {
   if (game.units.some(u => u.isMoving)) return; // let animations settle
   game.endTurn();
   ui.refreshTopbar(game);
-  ui.toast(`Turn ${game.turn}`, '#9fd0ff');
-  if (selected && game.units.includes(selected)) {
+  const ev = game.events;
+  ui.toast(ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`, ev.length ? '#7fd17f' : '#9fd0ff');
+  if (selectedCity && game.cities.includes(selectedCity)) {
+    refreshCityPanel();
+  } else if (selected && game.units.includes(selected)) {
     reachMap = game.reachableFor(selected);
     refreshUnitPanel();
     drawOverlays(null);

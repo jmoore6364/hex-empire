@@ -5,11 +5,12 @@ import { key } from './hex.js';
 
 export const OWNER_COLOR = [0x3a78d0, 0xd04545]; // 0 = player, 1 = AI
 
-// Unit archetypes. `move` is movement points per turn; `sight` is fog reveal radius.
+// Unit archetypes. `move` is movement points per turn; `sight` is fog reveal
+// radius; `cost` is production points to build one in a city.
 export const UNIT_TYPES = {
-  settler: { name: 'Settler', move: 2, sight: 2, hp: 10, canFound: true,  build: 'body' },
-  warrior: { name: 'Warrior', move: 2, sight: 2, hp: 20, attack: 6,      build: 'soldier' },
-  scout:   { name: 'Scout',   move: 4, sight: 3, hp: 10, attack: 2,      build: 'scout' },
+  settler: { name: 'Settler', move: 2, sight: 2, hp: 10, cost: 30, canFound: true,  build: 'body' },
+  warrior: { name: 'Warrior', move: 2, sight: 2, hp: 20, cost: 20, attack: 6,      build: 'soldier' },
+  scout:   { name: 'Scout',   move: 4, sight: 3, hp: 10, cost: 16, attack: 2,      build: 'scout' },
 };
 
 let nextId = 1;
@@ -99,7 +100,9 @@ export class City {
     this.name = name;
     this.population = 1;
     this.food = 0;
-    this.production = 0;
+    this.production = 0;        // production points stockpiled toward queue[0]
+    this.queue = [];            // build items: { kind:'unit'|'building', id, name, cost }
+    this.buildings = new Set(); // constructed building ids
     this.mesh = this._build();
   }
 

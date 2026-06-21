@@ -124,4 +124,32 @@ export class WorldView {
       m.position.set(top.x, top.y + 0.07, top.z);
     }
   }
+
+  // --- Territory borders ----------------------------------------------------
+  // Persistent (not cleared by clearHighlights) owner-colored tint over owned
+  // hexes. entries: [{ q, r, color, center }]. Redrawn whenever territory shifts.
+  showBorders(entries) {
+    if (!this.borderGroup) {
+      this.borderGroup = new THREE.Group();
+      this.scene.add(this.borderGroup);
+      this.borderPool = [];
+    }
+    let i = 0;
+    for (const e of entries) {
+      const top = this.topOf(e.q, e.r);
+      if (!top) continue;
+      let m = this.borderPool[i];
+      if (!m) {
+        m = new THREE.Mesh(this.flatGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
+        this.borderGroup.add(m);
+        this.borderPool.push(m);
+      }
+      m.material.color.setHex(e.color);
+      m.material.opacity = e.center ? 0.32 : 0.13;
+      m.position.set(top.x, top.y + 0.04, top.z);
+      m.visible = true;
+      i++;
+    }
+    for (; i < this.borderPool.length; i++) this.borderPool[i].visible = false;
+  }
 }

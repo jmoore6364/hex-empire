@@ -3,6 +3,10 @@
 import { neighbors, distance, hexToWorld, worldToHex, hexMap, key, hexesInRange } from '../src/hex.js';
 import { generateWorld, findStartTile, TERRAIN } from '../src/worldgen.js';
 import { findPath, reachable } from '../src/pathfinding.js';
+import { TECHS, canResearch, availableTechs } from '../src/tech.js';
+import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
+import { computeOwnership, ownedTiles } from '../src/territory.js';
+import { cityYields } from '../src/economy.js';
 
 let passed = 0, failed = 0;
 function check(name, cond) {
@@ -69,6 +73,62 @@ const reach = reachable(grid, { q: 0, r: 0 }, 2);
 check('reachable excludes the start', !reach.has(key(0, 0)));
 check('reachable includes an adjacent tile', reach.has(key(1, 0)));
 check('reachable respects the cost budget', [...reach.values()].every(c => c <= 2));
+
+// --- tech tree ---
+check('pottery needs no prereqs', canResearch('pottery', new Set()));
+check('writing is gated by pottery', !canResearch('writing', new Set()));
+check('writing opens after pottery', canResearch('writing', new Set(['pottery'])));
+check('cannot re-research a known tech', !canResearch('pottery', new Set(['pottery'])));
+check('availableTechs is cheapest-first', (() => {
+  const a = availableTechs(new Set(['pottery']));
+  return a.length && a.every((id, i) => i === 0 || TECHS[a[i - 1]].cost <= TECHS[id].cost);
+})());
+check('availableTechs hides locked & known', (() => {
+  const a = availableTechs(new Set(['pottery', 'writing']));
+  return !a.includes('pottery') && !a.includes('writing') && a.includes('currency') && a.includes('bronze');
+})());
+
+// --- buildings ---
+check('no buildings without tech', unlockedBuildings(new Set()).length === 0);
+check('pottery unlocks the granary', unlockedBuildings(new Set(['pottery'])).includes('granary'));
+check('granary requires pottery', BUILDINGS.granary.requires === 'pottery');
+check('applyBuildings multiplies the right yield', (() => {
+  const out = applyBuildings({ food: 4, prod: 2, gold: 1, science: 1 }, ['granary']);
+  return out.food === 5 && out.prod === 2; // +25% food only
+})());
+check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']).food === 4);
+
+// --- territory ownership ---
+{
+  const tg = new Map();
+  for (const { q, r } of hexMap(4)) tg.set(key(q, r), { q, r, passable: true, moveCost: 1, terrain: 'PLAINS', yields: { food: 1, prod: 1, gold: 0 } });
+  const cityA = { q: -2, r: 0 }, cityB = { q: 2, r: 0 };
+  const own = computeOwnership([cityA, cityB], tg, 2);
+  check('ownership claims tiles around cities', own.size > 0);
+  check('each owned tile has exactly one owner', [...own.values()].every(c => c === cityA || c === cityB));
+  check('a tile is never owned by two cities', own.get(key(-2, 0)) === cityA && own.get(key(2, 0)) === cityB);
+  const ownA = ownedTiles(cityA, own, tg);
+  check('ownedTiles excludes the city center', !ownA.some(t => t.q === -2 && t.r === 0));
+  check('ownedTiles all belong to that city', ownA.every(t => own.get(key(t.q, t.r)) === cityA));
+}
+
+// --- per-city yields ---
+{
+  const center = { yields: { food: 2, prod: 1, gold: 0 } };
+  const owned = [
+    { yields: { food: 3, prod: 0, gold: 0 } },
+    { yields: { food: 0, prod: 3, gold: 0 } },
+    { yields: { food: 0, prod: 0, gold: 1 } },
+  ];
+  const y1 = cityYields(center, owned, 1, []);
+  // pop 1 works center + best owned tile (value 3); food = 2 + 3 = 5
+  check('cityYields works population-many tiles', y1.food === 5);
+  check('cityYields adds the city tax (gold+1)', y1.gold === 1);
+  check('cityYields adds science from population', y1.science === 2); // 1 + pop
+  const y2 = cityYields(center, owned, 2, ['granary']);
+  // pop 2 works center + two best owned (food3, prod3): food=5 -> *1.25 = 6.25 -> 6
+  check('granary boosts a city food yield', y2.food === 6);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

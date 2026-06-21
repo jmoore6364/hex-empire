@@ -46,12 +46,32 @@ export class UI {
     this._renderActions(actions);
   }
 
-  showCity(city, actions = []) {
+  // model: { name, you, population, growth:{have,need}, yields,
+  //          producing:{name,turns}|null, queue:[{name,turns}],
+  //          research:{name,detail}, buildings:[names] }
+  showCity(model, actions = []) {
     this.sel.style.display = 'block';
-    this.selTitle.textContent = `${city.name}  ${city.owner === 0 ? '(You)' : '(Enemy)'}`;
-    this.selBody.innerHTML =
-      `<div class="row"><span>Population</span><span>${city.population}</span></div>` +
-      `<div class="row"><span class="food">Growth</span><span>${Math.round(city.food)}/${city.population * 10}</span></div>`;
+    this.selTitle.textContent = `${model.name}  ${model.you ? '(You)' : '(Enemy)'}`;
+
+    const sec = (label) => `<div class="sec">${label}</div>`;
+    const row = (l, v, cls = '') => `<div class="row"><span class="${cls}">${l}</span><span>${v}</span></div>`;
+    let h = '';
+    h += row('Population', model.population);
+    h += row('Growth', `${model.growth.have}/${model.growth.need}`, 'food');
+
+    if (model.you) {
+      const y = model.yields;
+      h += row('Per turn', `<span class="food">${y.food}🌾</span> <span class="prod">${y.prod}⚒</span> <span class="gold">${y.gold}🪙</span> <span class="sci">${y.science}🔬</span>`);
+      h += sec('Producing');
+      h += model.producing
+        ? row(`<span class="prod">${model.producing.name}</span>`, `${model.producing.turns}t`)
+        : `<div class="row"><span style="opacity:.55">Idle — pick something to build</span></div>`;
+      for (const q of model.queue) h += row(`<span style="opacity:.7">• ${q.name}</span>`, `${q.turns}t`);
+      h += sec('Research');
+      h += row(`<span class="sci">${model.research.name}</span>`, model.research.detail);
+      if (model.buildings.length) { h += sec('Buildings'); h += `<div class="row"><span>${model.buildings.join(', ')}</span></div>`; }
+    }
+    this.selBody.innerHTML = h;
     this._renderActions(actions);
   }
 

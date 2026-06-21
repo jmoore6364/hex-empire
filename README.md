@@ -1,10 +1,11 @@
 # Hex Empire
 
 A Civilization-like **3D hex-based 4X** strategy game, built with [Three.js](https://threejs.org/).
-This is **Pass 1: the playable core** — a procedurally generated 3D world you can
-explore, found cities on, and fight a basic AI opponent over.
+**Pass 2** turns the playable core into a real expand-and-develop game: cities
+have production queues, a tech tree gates buildings, territory is claimed and
+worked, and the AI grows its own economy.
 
-![status](https://img.shields.io/badge/status-pass%201%20playable-brightgreen)
+![status](https://img.shields.io/badge/status-pass%202%204X%20loop-brightgreen)
 
 ## Run it
 
@@ -32,12 +33,18 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | Left-click a tile | Move the selected unit there (hover shows the path) |
 | Left-click adjacent enemy | Attack |
 | **Found City** button | Settle your Settler on its current tile |
+| Left-click your city | Open it: queue units/buildings, choose research |
 | `Space` | End turn · `Esc` deselect |
 
-Your goal for now: scout the map, found your first city, and skirmish with the
-**Crimson** AI civ that starts on the far side of the continent.
+Found a city, then click it: pick what to **build** (units, or buildings once
+their tech is researched) and what to **research** (spend banked science). Each
+turn your cities work the tiles inside their borders, grow, and pour production
+into their queue. Expand with new Settlers and out-develop the **Crimson** AI civ
+on the far side of the continent.
 
-## What's implemented (Pass 1)
+## What's implemented
+
+**Pass 1 — the playable core**
 
 - **3D hex map** — procedurally generated terrain (ocean, coast, plains,
   grassland, forest, desert, tundra, snow, hills, mountains) as elevation-shaded
@@ -47,11 +54,23 @@ Your goal for now: scout the map, found your first city, and skirmish with the
   enemies hidden until spotted.
 - **Units** — Settler, Warrior, Scout as low-poly 3D models, with movement
   points, A\* pathfinding, animated movement, and a reachable-range overlay.
-- **Cities** — found a city with a Settler; cities work surrounding tiles for
-  food/production/gold/science and grow in population.
-- **Turn system** — End Turn refreshes movement, runs the AI, and banks income.
-- **Combat** — adjacent attacks with counterattacks; units can be destroyed.
-- **AI opponent** — founds a city, then scouts and hunts your units.
+- **Turn system & combat** — End Turn refreshes movement and runs the AI;
+  adjacent attacks with counterattacks.
+
+**Pass 2 — the 4X loop**
+
+- **City production queues** — click a city to queue units (and, once unlocked,
+  buildings). Production accumulates each turn from the city's prod yield; the
+  build menu shows per-item turn estimates and completed units appear by the city.
+- **Tech tree** — a starter tree (Pottery → Writing/Bronze Working → Currency)
+  spent from banked science; each tech unlocks a building in the queue.
+- **Buildings** — Granary (+food), Workshop (+prod), Market (+gold),
+  Library (+science) multiply their city's yields.
+- **City territory** — each city claims the hexes within radius 2 (nearest city
+  wins contested tiles) and works the best of them by population. Owner-colored
+  borders are drawn on the map.
+- **AI economy** — the Crimson AI researches, queues production, and sends
+  settlers out to found new cities instead of starting with a fixed roster.
 
 ## Architecture
 
@@ -62,18 +81,24 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/hex.js` | Hex grid math (axial/cube coords, neighbors, distance, layout) — *pure* |
 | `src/worldgen.js` | Seeded Perlin terrain generation, terrain catalogue — *pure* |
 | `src/pathfinding.js` | A\* and movement-range flood fill — *pure* |
-| `src/world.js` | Renders tile data into hex-prism meshes; fog & highlight overlays |
+| `src/tech.js` | Tech tree catalogue & research prerequisites — *pure* |
+| `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
+| `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |
+| `src/economy.js` | Per-city yield calculation (worked tiles + buildings) — *pure* |
+| `src/world.js` | Renders tile data into hex-prism meshes; fog, highlight & border overlays |
 | `src/units.js` | Unit & City classes — their 3D meshes and movement animation |
-| `src/game.js` | Rules: turns, fog, founding, movement budgets, combat, AI |
+| `src/game.js` | Rules: turns, fog, founding, combat, the 4X economy, AI |
 | `src/camera.js` | RTS camera rig |
 | `src/ui.js` | HUD / selection panel (plain DOM) |
 | `src/main.js` | Bootstrap: scene, lights, input, render loop |
 | `server.mjs` | Zero-dependency static server |
 | `test/logic.test.mjs` | Self-tests for the pure modules |
+| `test/smoke.mjs` | Optional headless e2e (drives the app in Edge/Chromium via CDP) |
 
 ## Roadmap
 
-- **Pass 2 — 4X loop:** city build queues, a tech tree, unit production, resources.
+- **Pass 2 — 4X loop:** ✅ city build queues, tech tree, unit production, buildings,
+  city territory, AI economy.
 - **Pass 3 — characters & depth:** swap placeholder units for proper GLTF
   character models, smarter AI, ranged combat, terrain features.
 - **Pass 4+ —** diplomacy, multiple civs, victory conditions, UI polish, save/load.

@@ -1,10 +1,14 @@
 // game.js — the rules layer: turns, fog of war, founding cities, movement
-// budgets, combat, and a simple AI opponent. Holds no Three.js scene logic
-// beyond adding/removing the meshes that units and cities carry.
+// budgets, combat, the 4X economy (production queues, tech, buildings, city
+// territory), and a simple AI opponent. Holds no Three.js scene logic beyond
+// adding/removing the meshes that units and cities carry.
 import { key, distance, hexesInRange, neighbors } from './hex.js';
-import { TERRAIN } from './worldgen.js';
 import { findPath, reachable } from './pathfinding.js';
-import { Unit, City } from './units.js';
+import { Unit, City, UNIT_TYPES, OWNER_COLOR } from './units.js';
+import { TECHS, availableTechs } from './tech.js';
+import { BUILDINGS, unlockedBuildings } from './buildings.js';
+import { computeOwnership, ownedTiles } from './territory.js';
+import { cityYields } from './economy.js';
 
 const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhollow', 'Saltspire', 'Ironford', 'Dawnvale'];
 
@@ -20,8 +24,17 @@ export class Game {
     this.cityNameIdx = 0;
     this.explored = new Set();
     this.visible = new Set();
-    this.income = { food: 0, prod: 0, gold: 0, science: 0 };
-    this.treasury = { gold: 0, science: 0 };
+    this.ownership = new Map();        // "q,r" -> owning city
+    this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
+    this.events = [];                  // human-readable notices from the last turn
+
+    // Per-civ state: 0 = player, 1 = AI. Science accrues in treasury.science as a
+    // research "bank" that is spent when the current tech's cost is met.
+    this.civs = [
+      { owner: 0, name: 'Your Empire', treasury: { gold: 0, science: 0 }, research: { researched: new Set(), current: null } },
+      { owner: 1, name: 'Crimson',     treasury: { gold: 0, science: 0 }, research: { researched: new Set(), current: null } },
+    ];
+    this.treasury = this.civs[0].treasury; // back-compat alias for the HUD
   }
 
   // --- spawning -------------------------------------------------------------
@@ -57,6 +70,7 @@ export class Game {
     for (const c of this.cities) if (c.owner === 0) reveal(c.q, c.r, 3);
     this.view.applyFog(this.visible, this.explored);
     this._updateMeshVisibility();
+    this.updateBorders();
   }
 
   // Enemy units/cities are only shown when inside the player's current sight.
@@ -69,6 +83,25 @@ export class Game {
       if (c.owner === 0) { c.mesh.visible = true; continue; }
       c.mesh.visible = this.explored.has(key(c.q, c.r));
     }
+  }
+
+  // --- territory ------------------------------------------------------------
+  recomputeOwnership() {
+    this.ownership = computeOwnership(this.cities, this.tiles, 2);
+  }
+
+  // Owned (non-center) tile objects for a city.
+  ownedTilesFor(city) { return ownedTiles(city, this.ownership, this.tiles); }
+
+  // Feed the renderer a colored marker per owned hex, hiding unexplored enemy land.
+  updateBorders() {
+    const entries = [];
+    for (const [k, city] of this.ownership) {
+      if (city.owner !== 0 && !this.explored.has(k)) continue;
+      const [q, r] = k.split(',').map(Number);
+      entries.push({ q, r, color: OWNER_COLOR[city.owner], center: (city.q === q && city.r === r) });
+    }
+    this.view.showBorders(entries);
   }
 
   // --- player actions -------------------------------------------------------
@@ -122,6 +155,7 @@ export class Game {
     this.scene.add(city.mesh);
     this.cities.push(city);
     this._removeUnit(unit);
+    this.recomputeOwnership();
     this.recomputeFog();
     return { ok: true, city };
   }
@@ -145,60 +179,173 @@ export class Game {
   }
 
   // --- economy --------------------------------------------------------------
-  computeIncome() {
+  // One city's per-turn yields, from the tiles it works plus its buildings.
+  cityYields(city) {
+    const center = this.tiles.get(key(city.q, city.r));
+    return cityYields(center, this.ownedTilesFor(city), city.population, city.buildings);
+  }
+
+  // Aggregate yields for a civ (used by the HUD for the player).
+  computeIncome(owner = 0) {
     const inc = { food: 0, prod: 0, gold: 0, science: 0 };
     for (const c of this.cities) {
-      if (c.owner !== 0) continue;
-      // Work the city center plus up to `population` of the best surrounding tiles.
-      const ring = neighbors(c.q, c.r)
-        .map(n => this.tiles.get(key(n.q, n.r)))
-        .filter(Boolean)
-        .sort((a, b) => (b.yields.food + b.yields.prod + b.yields.gold) - (a.yields.food + a.yields.prod + a.yields.gold));
-      const worked = [this.tiles.get(key(c.q, c.r)), ...ring.slice(0, c.population)];
-      for (const t of worked) {
-        inc.food += t.yields.food; inc.prod += t.yields.prod; inc.gold += t.yields.gold;
-      }
-      inc.gold += 1;                       // city tax
-      inc.science += 1 + c.population;     // research from population
+      if (c.owner !== owner) continue;
+      const y = this.cityYields(c);
+      inc.food += y.food; inc.prod += y.prod; inc.gold += y.gold; inc.science += y.science;
     }
     return inc;
   }
 
+  // --- production queue -----------------------------------------------------
+  // Build items a civ may queue right now: every unit, plus tech-unlocked
+  // buildings. Per-city filtering (already built / queued) happens in the UI.
+  buildOptions(owner) {
+    const civ = this.civs[owner];
+    const items = [];
+    for (const [id, def] of Object.entries(UNIT_TYPES)) {
+      items.push({ kind: 'unit', id, name: def.name, cost: def.cost });
+    }
+    for (const id of unlockedBuildings(civ.research.researched)) {
+      items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc });
+    }
+    return items;
+  }
+
+  enqueue(city, item) { city.queue.push({ ...item }); }
+
+  // Turns left for the front item (accounts for stockpiled production); for any
+  // other cost, a from-scratch estimate. Returns '∞' if the city makes no prod.
+  turnsFor(city, cost, isFront = false) {
+    const prod = this.cityYields(city).prod;
+    if (prod <= 0) return '∞';
+    const remaining = isFront ? Math.max(0, cost - city.production) : cost;
+    return Math.max(1, Math.ceil(remaining / prod));
+  }
+
+  // Where a freshly built unit appears: the city tile if free, else a neighbor.
+  _spawnSpot(city) {
+    if (!this.unitAt(city.q, city.r)) return { q: city.q, r: city.r };
+    for (const n of neighbors(city.q, city.r)) {
+      const t = this.tiles.get(key(n.q, n.r));
+      if (t && t.passable && !this.unitAt(n.q, n.r) && !this.cityAt(n.q, n.r)) return n;
+    }
+    return null;
+  }
+
+  _completeBuild(city, item) {
+    if (item.kind === 'building') {
+      city.buildings.add(item.id);
+      if (city.owner === 0) this.events.push(`${BUILDINGS[item.id].name} built in ${city.name}`);
+    } else {
+      const spot = this._spawnSpot(city);
+      this.spawnUnit(item.id, city.owner, spot.q, spot.r);
+      if (city.owner === 0) this.events.push(`${UNIT_TYPES[item.id].name} trained in ${city.name}`);
+    }
+  }
+
+  // Pour this turn's production into the queue, completing affordable items.
+  _processProduction(city) {
+    city.production += this.cityYields(city).prod;
+    while (city.queue.length) {
+      const item = city.queue[0];
+      if (city.production < item.cost) break;
+      if (item.kind === 'unit' && !this._spawnSpot(city)) break; // no room — wait a turn
+      city.production -= item.cost;
+      city.queue.shift();
+      this._completeBuild(city, item);
+    }
+  }
+
+  // Set / change a civ's current research target.
+  setResearch(owner, techId) { this.civs[owner].research.current = techId; }
+
+  _processResearch(civ) {
+    const cur = civ.research.current;
+    if (!cur) return;
+    const tech = TECHS[cur];
+    if (civ.treasury.science >= tech.cost) {
+      civ.treasury.science -= tech.cost;
+      civ.research.researched.add(cur);
+      civ.research.current = null;
+      if (civ.owner === 0) this.events.push(`Researched ${tech.name} (unlocks ${tech.unlocks})`);
+    }
+  }
+
+  // Run a civ's whole economy for one turn: growth, production, banking, research.
+  _processEconomy(owner) {
+    const civ = this.civs[owner];
+    for (const c of this.cities) {
+      if (c.owner !== owner) continue;
+      const y = this.cityYields(c);
+      // Growth from this city's own food.
+      c.food += y.food;
+      const need = c.population * 10;
+      if (c.food >= need) { c.food -= need; c.population++; }
+      this._processProduction(c);
+      civ.treasury.gold += y.gold;
+      civ.treasury.science += y.science;
+    }
+    this._processResearch(civ);
+  }
+
   // --- turns ----------------------------------------------------------------
   endTurn() {
+    this.events = [];
     this._runAI();
 
-    // Player economy: grow cities, bank gold & science.
-    this.income = this.computeIncome();
-    for (const c of this.cities) {
-      if (c.owner !== 0) continue;
-      c.food += this.income.food / Math.max(1, this.cities.filter(x => x.owner === 0).length);
-      if (c.food >= c.population * 10) { c.food = 0; c.population++; }
-    }
-    this.treasury.gold += this.income.gold;
-    this.treasury.science += this.income.science;
+    this._processEconomy(1); // AI economy
+    this._processEconomy(0); // player economy
+    this.income = this.computeIncome(0);
 
     this.turn++;
     for (const u of this.units) if (u.owner === 0) u.move = u.def.move;
+    this.recomputeOwnership();
     this.recomputeFog();
     return this.income;
   }
 
-  // A deliberately simple opponent: found a city early, then scout/hunt.
+  // A simple opponent: research the cheapest tech, queue settlers to expand then
+  // buildings and military, and push units toward the player.
   _runAI() {
+    const civ = this.civs[1];
     for (const u of this.units) if (u.owner === 1) u.move = u.def.move;
 
-    const hasAICity = this.cities.some(c => c.owner === 1);
+    // Research: always be working on the cheapest available tech.
+    if (!civ.research.current) {
+      const opts = availableTechs(civ.research.researched);
+      if (opts.length) civ.research.current = opts[0];
+    }
+
+    // Production: decide what each idle AI city should build next.
+    const aiCities = this.cities.filter(c => c.owner === 1);
+    const aiSettlers = this.units.filter(u => u.owner === 1 && u.def.canFound).length;
+    for (const c of aiCities) {
+      if (c.queue.length) continue;
+      const unlocked = unlockedBuildings(civ.research.researched).filter(id => !c.buildings.has(id));
+      if (aiCities.length < 3 && aiSettlers === 0) {
+        c.queue.push(this._aiItem('unit', 'settler'));
+      } else if (unlocked.length) {
+        c.queue.push(this._aiItem('building', unlocked[0]));
+      } else {
+        c.queue.push(this._aiItem('unit', (this.turn % 2) ? 'warrior' : 'scout'));
+      }
+    }
+
+    // Movement: settlers expand, others scout/hunt the player.
     for (const u of this.units.filter(u => u.owner === 1)) {
-      if (u.def.canFound && !hasAICity) { this.foundCity(u); continue; }
+      if (u.def.canFound) {
+        const tile = this.tiles.get(key(u.q, u.r));
+        const crowded = this.cities.some(c => c.owner === 1 && distance(c, u) < 3);
+        if (tile && tile.passable && !crowded && !this.cityAt(u.q, u.r)) { this.foundCity(u); continue; }
+      }
 
       // Head toward the nearest visible player asset, else wander.
       const targets = [...this.units.filter(t => t.owner === 0), ...this.cities.filter(c => c.owner === 0)];
       let dest = null;
-      if (targets.length) {
+      if (targets.length && u.def.attack) {
         targets.sort((a, b) => distance(u, a) - distance(u, b));
         const t = targets[0];
-        if (distance(u, t) === 1 && u.def.attack && this.unitAt(t.q, t.r)) {
+        if (distance(u, t) === 1 && this.unitAt(t.q, t.r)) {
           this.resolveCombat(u, this.unitAt(t.q, t.r));
           continue;
         }
@@ -209,7 +356,6 @@ export class Game {
       if (!options.length) continue;
       let pick = options[0];
       if (dest) {
-        // Greedily step toward the target.
         let bestD = Infinity;
         for (const k of options) {
           const [q, r] = k.split(',').map(Number);
@@ -223,5 +369,10 @@ export class Game {
       const path = findPath(this.tiles, u, { q, r }, this.occupied(u));
       if (path) u.enqueuePath(path, this.view);
     }
+  }
+
+  _aiItem(kind, id) {
+    const def = kind === 'unit' ? UNIT_TYPES[id] : BUILDINGS[id];
+    return { kind, id, name: def.name, cost: def.cost };
   }
 }
