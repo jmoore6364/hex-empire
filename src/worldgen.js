@@ -2,6 +2,7 @@
 // Produces a Map of tile data keyed by "q,r" that the renderer turns into meshes.
 
 import { hexMap, key } from './hex.js';
+import { RESOURCES, resourcesForTerrain, applyResource } from './resources.js';
 
 // Terrain catalogue. `color` is consumed by the renderer; the gameplay fields
 // (passable, moveCost, yields) are used by movement and the economy.
@@ -118,10 +119,28 @@ export function generateWorld(radius = 12, seed = 1337) {
       moisture,
       passable: def.passable,
       moveCost: def.moveCost,
-      yields: def.yields,
+      yields: def.yields,   // shared base; cloned in placeResources if enriched
+      resource: null,
     });
   }
+  placeResources(tiles, seed);
   return { tiles, radius, seed };
+}
+
+// Scatter special resources across eligible terrain, deterministically by seed.
+// A resourced tile gets its own yields object (base + bonus) so we never mutate
+// the shared per-terrain yields.
+function placeResources(tiles, seed) {
+  const rand = mulberry32(seed ^ 0x5bf03635);
+  for (const tile of tiles.values()) {
+    const opts = resourcesForTerrain(tile.terrain);
+    if (!opts.length) continue;
+    if (rand() < 0.11) {
+      const id = opts[Math.floor(rand() * opts.length)];
+      tile.resource = id;
+      tile.yields = applyResource(tile.yields, id);
+    }
+  }
 }
 
 // Find a reasonable starting hex for a civ: a passable land tile near the

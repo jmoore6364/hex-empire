@@ -1,6 +1,8 @@
 // ui.js — thin DOM layer over the HUD. Knows nothing about Three.js; main.js
 // feeds it state and wires its buttons to game actions.
 import { TERRAIN } from './worldgen.js';
+import { RESOURCES, resourceSummary } from './resources.js';
+import { defenseMultiplier } from './combat.js';
 
 const $ = (id) => document.getElementById(id);
 
@@ -30,6 +32,7 @@ export class UI {
       `<div class="row"><span>HP</span><span>${unit.hp}/${unit.def.hp}</span></div>` +
       `<div class="row"><span>Movement</span><span>${unit.move}/${unit.def.move}</span></div>` +
       (unit.def.attack ? `<div class="row"><span>Attack</span><span>${unit.def.attack}</span></div>` : '') +
+      (unit.def.range > 1 ? `<div class="row"><span>Range</span><span>${unit.def.range} (ranged)</span></div>` : '') +
       `<div class="row"><span>Tile</span><span>${unit.q}, ${unit.r}</span></div>`;
     this._renderActions(actions);
   }
@@ -38,10 +41,13 @@ export class UI {
     this.sel.style.display = 'block';
     const def = TERRAIN[tile.terrain];
     this.selTitle.textContent = def.name;
+    const defMul = defenseMultiplier(tile.terrain);
     this.selBody.innerHTML =
+      (tile.resource ? `<div class="row"><span style="color:#f0c95a">Resource</span><span>${RESOURCES[tile.resource].name} (${resourceSummary(tile.resource)})</span></div>` : '') +
       `<div class="row"><span class="food">Food</span><span>${tile.yields.food}</span></div>` +
       `<div class="row"><span class="prod">Production</span><span>${tile.yields.prod}</span></div>` +
       `<div class="row"><span class="gold">Gold</span><span>${tile.yields.gold}</span></div>` +
+      (defMul > 1 ? `<div class="row"><span>Defense</span><span>+${Math.round((defMul - 1) * 100)}%</span></div>` : '') +
       `<div class="row"><span>Passable</span><span>${tile.passable ? 'yes' : 'no'}</span></div>`;
     this._renderActions(actions);
   }

@@ -72,6 +72,17 @@ on the far side of the continent.
 - **AI economy** — the Crimson AI researches, queues production, and sends
   settlers out to found new cities instead of starting with a fixed roster.
 
+**Pass 3 — characters & depth** *(in progress)*
+
+- **Tile resources** — Wheat, Fish, Horses, Iron, Gold and Stone spawn on
+  matching terrain (deterministic per seed), boost that tile's yields, and show
+  as floating gems once you've explored them.
+- **Ranged combat** — a new **Archer** strikes from 2 tiles away and takes no
+  counterattack; melee units must close to an adjacent hex. Selected units paint
+  their attackable enemies red.
+- **Terrain defense** — defenders on hills, forest and mountains take less
+  damage, so where you fight matters.
+
 ## Architecture
 
 Pure game logic is kept free of Three.js so it can be unit-tested in Node:
@@ -85,6 +96,8 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
 | `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |
 | `src/economy.js` | Per-city yield calculation (worked tiles + buildings) — *pure* |
+| `src/resources.js` | Tile resource catalogue & yield bonuses — *pure* |
+| `src/combat.js` | Terrain defense bonuses & attack resolution (incl. ranged) — *pure* |
 | `src/world.js` | Renders tile data into hex-prism meshes; fog, highlight & border overlays |
 | `src/units.js` | Unit & City classes — their 3D meshes and movement animation |
 | `src/game.js` | Rules: turns, fog, founding, combat, the 4X economy, AI |
@@ -99,6 +112,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 
 - **Pass 2 — 4X loop:** ✅ city build queues, tech tree, unit production, buildings,
   city territory, AI economy.
-- **Pass 3 — characters & depth:** swap placeholder units for proper GLTF
-  character models, smarter AI, ranged combat, terrain features.
+- **Pass 3 — characters & depth:** ⏳ tile resources, ranged combat and terrain
+  defense are in; still to come — rigged GLTF character models, distinct unit
+  art per type, and smarter strategic AI.
 - **Pass 4+ —** diplomacy, multiple civs, victory conditions, UI polish, save/load.

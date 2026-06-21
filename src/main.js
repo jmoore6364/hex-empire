@@ -187,6 +187,7 @@ function drawOverlays(hoverTile) {
   view.clearHighlights();
   if (!selected || selected.owner !== 0) return;
   view.showReachable(reachMap);
+  view.showTargets(game.attackTargetsFor(selected));
   if (hoverTile) {
     const k = key(hoverTile.q, hoverTile.r);
     if (reachMap.has(k)) {

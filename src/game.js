@@ -9,6 +9,7 @@ import { TECHS, availableTechs } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { computeOwnership, ownedTiles } from './territory.js';
 import { cityYields } from './economy.js';
+import { resolveAttack } from './combat.js';
 
 const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhollow', 'Saltspire', 'Ironford', 'Dawnvale'];
 
@@ -119,10 +120,11 @@ export class Game {
 
     const enemy = this.unitAt(q, r);
     if (enemy && enemy.owner !== unit.owner) {
-      if (distance(unit, { q, r }) === 1 && unit.def.attack) {
-        return this.resolveCombat(unit, enemy);
-      }
-      return { ok: false, msg: 'Cannot reach that enemy' };
+      if (!unit.def.attack) return { ok: false, msg: 'This unit cannot attack' };
+      const d = distance(unit, { q, r });
+      const range = unit.def.range || 1;
+      if (d >= 1 && d <= range) return this.resolveCombat(unit, enemy, range > 1);
+      return { ok: false, msg: 'Out of range' };
     }
     if (enemy && enemy.owner === unit.owner) return { ok: false, msg: 'Tile occupied' };
     if (this.cityAt(q, r) && this.cityAt(q, r).owner !== unit.owner) return { ok: false, msg: 'Enemy city' };
@@ -160,17 +162,33 @@ export class Game {
     return { ok: true, city };
   }
 
-  resolveCombat(attacker, defender) {
-    defender.hp -= attacker.def.attack || 0;
-    let msg = `${attacker.def.name} strikes ${defender.def.name}`;
-    if (defender.hp > 0 && defender.def.attack) {
-      attacker.hp -= Math.round(defender.def.attack * 0.6); // counterattack
-    }
+  // Ranged attackers (range > 1) strike without taking a counterattack; the
+  // defender's terrain reduces the damage it takes.
+  resolveCombat(attacker, defender, isRanged = false) {
+    const dt = this.tiles.get(key(defender.q, defender.r));
+    const res = resolveAttack(attacker.def.attack || 0, defender.def.attack || 0, dt ? dt.terrain : null, isRanged);
+    defender.hp -= res.dmgToDefender;
+    let msg = `${attacker.def.name} ${isRanged ? 'shoots' : 'strikes'} ${defender.def.name}`;
+    if (defender.hp > 0 && res.dmgToAttacker) attacker.hp -= res.dmgToAttacker; // counterattack
     attacker.move = 0;
     if (defender.hp <= 0) { this._removeUnit(defender); msg = `${defender.def.name} destroyed!`; }
     if (attacker.hp <= 0) { this._removeUnit(attacker); msg = `${attacker.def.name} lost in battle!`; }
     this.recomputeFog();
     return { ok: true, combat: true, msg };
+  }
+
+  // Visible enemy units this unit could attack right now (melee or ranged).
+  attackTargetsFor(unit) {
+    if (!unit.def.attack || unit.move <= 0) return [];
+    const range = unit.def.range || 1;
+    const out = [];
+    for (const e of this.units) {
+      if (e.owner === unit.owner) continue;
+      if (!this.visible.has(key(e.q, e.r))) continue;
+      const d = distance(unit, e);
+      if (d >= 1 && d <= range) out.push({ q: e.q, r: e.r });
+    }
+    return out;
   }
 
   _removeUnit(unit) {
@@ -327,7 +345,7 @@ export class Game {
       } else if (unlocked.length) {
         c.queue.push(this._aiItem('building', unlocked[0]));
       } else {
-        c.queue.push(this._aiItem('unit', (this.turn % 2) ? 'warrior' : 'scout'));
+        c.queue.push(this._aiItem('unit', ['warrior', 'archer', 'scout'][this.turn % 3]));
       }
     }
 
@@ -343,13 +361,15 @@ export class Game {
       const targets = [...this.units.filter(t => t.owner === 0), ...this.cities.filter(c => c.owner === 0)];
       let dest = null;
       if (targets.length && u.def.attack) {
+        // Shoot/strike the nearest enemy unit already within reach.
+        const range = u.def.range || 1;
+        const inReach = this.units
+          .filter(e => e.owner === 0)
+          .sort((a, b) => distance(u, a) - distance(u, b))
+          .find(e => distance(u, e) >= 1 && distance(u, e) <= range);
+        if (inReach) { this.resolveCombat(u, inReach, range > 1); continue; }
         targets.sort((a, b) => distance(u, a) - distance(u, b));
-        const t = targets[0];
-        if (distance(u, t) === 1 && this.unitAt(t.q, t.r)) {
-          this.resolveCombat(u, this.unitAt(t.q, t.r));
-          continue;
-        }
-        dest = t;
+        dest = targets[0];
       }
       const reach = reachable(this.tiles, u, u.move, this.occupied(u));
       const options = [...reach.keys()];

@@ -3,6 +3,7 @@
 import * as THREE from 'three';
 import { HEX_SIZE, hexToWorld, key } from './hex.js';
 import { TERRAIN } from './worldgen.js';
+import { RESOURCES } from './resources.js';
 
 const UNEXPLORED = new THREE.Color(0x0c1018);
 
@@ -23,6 +24,12 @@ export class WorldView {
     // Shared prism geometry; per-tile we only scale Y and recolor.
     this.geo = new THREE.CylinderGeometry(HEX_SIZE * 0.97, HEX_SIZE * 0.97, 1, 6);
 
+    // Resource markers: a small floating gem over tiles that carry a resource.
+    this.resGeo = new THREE.OctahedronGeometry(0.17);
+    this.resourceGroup = new THREE.Group();
+    scene.add(this.resourceGroup);
+    this.resourceMarkers = new Map();   // "q,r" -> marker mesh
+
     for (const tile of world.tiles.values()) {
       const def = TERRAIN[tile.terrain];
       const h = tileHeight(tile);
@@ -37,6 +44,18 @@ export class WorldView {
       const k = key(tile.q, tile.r);
       this.tileMeshes.set(k, mesh);
       this.tops.set(k, new THREE.Vector3(x, h, z));
+
+      if (tile.resource) {
+        const rc = RESOURCES[tile.resource];
+        const mk = new THREE.Mesh(this.resGeo, new THREE.MeshStandardMaterial({
+          color: rc.color, flatShading: true, emissive: rc.color, emissiveIntensity: 0.3, roughness: 0.4,
+        }));
+        mk.position.set(x, h + 0.34, z);
+        mk.castShadow = true;
+        mk.visible = false; // revealed by fog once explored
+        this.resourceGroup.add(mk);
+        this.resourceMarkers.set(k, mk);
+      }
     }
 
     this._initHighlights();
@@ -57,6 +76,8 @@ export class WorldView {
       } else {
         mesh.material.color.copy(UNEXPLORED);
       }
+      const mk = this.resourceMarkers.get(k);
+      if (mk) mk.visible = explored.has(k);
     }
   }
 
@@ -122,6 +143,16 @@ export class WorldView {
       if (!top) continue;
       const m = this._takeMarker(0xffe14a, 0.5);
       m.position.set(top.x, top.y + 0.07, top.z);
+    }
+  }
+
+  // Red markers over enemies a selected unit can attack this turn.
+  showTargets(list) {
+    for (const t of list) {
+      const top = this.topOf(t.q, t.r);
+      if (!top) continue;
+      const m = this._takeMarker(0xff5555, 0.6);
+      m.position.set(top.x, top.y + 0.09, top.z);
     }
   }
 

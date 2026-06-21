@@ -6,11 +6,13 @@ import { key } from './hex.js';
 export const OWNER_COLOR = [0x3a78d0, 0xd04545]; // 0 = player, 1 = AI
 
 // Unit archetypes. `move` is movement points per turn; `sight` is fog reveal
-// radius; `cost` is production points to build one in a city.
+// radius; `cost` is production points to build one in a city; `range` (if > 1)
+// makes the unit attack from a distance without taking a counterattack.
 export const UNIT_TYPES = {
   settler: { name: 'Settler', move: 2, sight: 2, hp: 10, cost: 30, canFound: true,  build: 'body' },
   warrior: { name: 'Warrior', move: 2, sight: 2, hp: 20, cost: 20, attack: 6,      build: 'soldier' },
   scout:   { name: 'Scout',   move: 4, sight: 3, hp: 10, cost: 16, attack: 2,      build: 'scout' },
+  archer:  { name: 'Archer',  move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2, build: 'archer' },
 };
 
 let nextId = 1;
@@ -47,6 +49,14 @@ export class Unit {
       body.position.y = 0.45; g.add(body);
       const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), trim);
       head.position.y = 0.8; g.add(head);
+    } else if (this.def.build === 'archer') {
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.5, 6), mat);
+      body.position.y = 0.42; g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), trim);
+      head.position.y = 0.76; g.add(head);
+      // a curved bow held to the side
+      const bow = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.025, 6, 8, Math.PI), trim);
+      bow.position.set(-0.2, 0.5, 0); bow.rotation.z = -Math.PI / 2; g.add(bow);
     } else { // settler — a little wagon
       const cart = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.34), mat);
       cart.position.y = 0.4; g.add(cart);

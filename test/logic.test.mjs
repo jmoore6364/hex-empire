@@ -7,6 +7,8 @@ import { TECHS, canResearch, availableTechs } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
 import { computeOwnership, ownedTiles } from '../src/territory.js';
 import { cityYields } from '../src/economy.js';
+import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
+import { defenseMultiplier, resolveAttack } from '../src/combat.js';
 
 let passed = 0, failed = 0;
 function check(name, cond) {
@@ -129,6 +131,42 @@ check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']
   // pop 2 works center + two best owned (food3, prod3): food=5 -> *1.25 = 6.25 -> 6
   check('granary boosts a city food yield', y2.food === 6);
 }
+
+// --- resources ---
+check('wheat lives on grassland/plains', resourcesForTerrain('GRASSLAND').includes('wheat') && resourcesForTerrain('PLAINS').includes('wheat'));
+check('ocean has no resources', resourcesForTerrain('OCEAN').length === 0);
+check('applyResource adds the bonus', (() => {
+  const out = applyResource({ food: 2, prod: 0, gold: 0 }, 'wheat');
+  return out.food === 4; // +2 food
+})());
+check('applyResource does not mutate the input', (() => {
+  const base = { food: 2 }; applyResource(base, 'wheat'); return base.food === 2;
+})());
+check('applyResource ignores unknown resource', applyResource({ food: 1 }, 'nope').food === 1);
+check('every resource only lists real terrains', Object.values(RESOURCES).every(r => r.terrains.length > 0));
+{
+  // Deterministic placement: same seed -> same resources.
+  const w1 = generateWorld(8, 7), w2 = generateWorld(8, 7), w3 = generateWorld(8, 8);
+  const sig = (w) => [...w.tiles.values()].map(t => t.resource || '-').join('');
+  check('resource placement is deterministic per seed', sig(w1) === sig(w2));
+  check('different seeds differ in resources', sig(w1) !== sig(w3));
+  const placed = [...w1.tiles.values()].filter(t => t.resource);
+  check('some resources get placed', placed.length > 0);
+  check('placed resources match their terrain', placed.every(t => RESOURCES[t.resource].terrains.includes(t.terrain)));
+  check('a resourced tile out-yields its base terrain', placed.every(t => {
+    const base = TERRAIN[t.terrain].yields;
+    return (t.yields.food + t.yields.prod + t.yields.gold) >= (base.food + base.prod + base.gold);
+  }));
+}
+
+// --- combat ---
+check('open ground gives no defense bonus', defenseMultiplier('GRASSLAND') === 1.0);
+check('hills give a defense bonus', defenseMultiplier('HILLS') > 1.0);
+check('terrain reduces damage taken', resolveAttack(6, 0, 'HILLS').dmgToDefender < resolveAttack(6, 0, 'GRASSLAND').dmgToDefender);
+check('an attack always does at least 1 damage', resolveAttack(1, 0, 'MOUNTAIN').dmgToDefender >= 1);
+check('melee provokes a counterattack', resolveAttack(6, 6, 'GRASSLAND', false).dmgToAttacker > 0);
+check('ranged takes no counterattack', resolveAttack(6, 6, 'GRASSLAND', true).dmgToAttacker === 0);
+check('an unarmed defender never counters', resolveAttack(6, 0, 'GRASSLAND', false).dmgToAttacker === 0);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);
