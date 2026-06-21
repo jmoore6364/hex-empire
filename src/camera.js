@@ -1,5 +1,6 @@
 // camera.js — an RTS-style camera rig: a ground target with yaw/pitch/zoom.
-// Keyboard pans the target, scroll zooms, right-drag orbits.
+// Keyboard pans the target, mouse wheel / trackpad / pinch zooms, right-drag
+// (or two-finger drag) orbits.
 import * as THREE from 'three';
 
 export class CameraRig {
@@ -19,8 +20,19 @@ export class CameraRig {
     this.lastX = 0;
     this.lastY = 0;
 
+    // Active touch/pen pointers for pinch-zoom (id -> {x, y}).
+    this.pointers = new Map();
+    this._lastPinch = 0;             // previous two-finger distance, px
+
+    // Let us handle all touch gestures ourselves (no browser pan/zoom hijack).
+    domElement.style.touchAction = 'none';
+
     this._bind();
     this.update(0);
+  }
+
+  _zoomBy(amount) {
+    this.distance = THREE.MathUtils.clamp(this.distance + amount, this.minDist, this.maxDist);
   }
 
   _bind() {
@@ -40,10 +52,47 @@ export class CameraRig {
       this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - this.lastY) * 0.004, 0.35, 1.45);
       this.lastX = e.clientX; this.lastY = e.clientY;
     });
+    // Wheel + trackpad zoom. Proportional to the scroll delta so a notched
+    // mouse wheel and a precision trackpad both feel right; ctrlKey marks a
+    // trackpad pinch gesture (finer steps). Also scaled by distance so it's
+    // smooth when zoomed both in and out.
     this.dom.addEventListener('wheel', (e) => {
       e.preventDefault();
-      this.distance = THREE.MathUtils.clamp(this.distance + Math.sign(e.deltaY) * 2.2, this.minDist, this.maxDist);
+      const unit = e.deltaMode === 1 ? 16 : e.deltaMode === 2 ? 400 : 1; // lines/pages -> px
+      const px = e.deltaY * unit;
+      const factor = (e.ctrlKey ? 0.03 : 0.012) * (this.distance / 22);
+      this._zoomBy(THREE.MathUtils.clamp(px * factor, -6, 6));
     }, { passive: false });
+
+    // --- Touch / pen: two-finger pinch to zoom ---
+    this.dom.addEventListener('pointerdown', (e) => {
+      if (e.pointerType === 'mouse') return; // mouse handled above
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.pointers.size === 2) this._lastPinch = this._pinchDist();
+    });
+    const endPointer = (e) => {
+      if (!this.pointers.has(e.pointerId)) return;
+      this.pointers.delete(e.pointerId);
+      if (this.pointers.size < 2) this._lastPinch = 0;
+    };
+    this.dom.addEventListener('pointerup', endPointer);
+    this.dom.addEventListener('pointercancel', endPointer);
+    this.dom.addEventListener('pointerleave', endPointer);
+    this.dom.addEventListener('pointermove', (e) => {
+      if (!this.pointers.has(e.pointerId)) return;
+      this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
+      if (this.pointers.size !== 2) return;
+      e.preventDefault();
+      const dist = this._pinchDist();
+      // Pinch apart (distance grows) zooms in; together zooms out.
+      if (this._lastPinch) this._zoomBy((this._lastPinch - dist) * 0.05 * (this.distance / 22));
+      this._lastPinch = dist;
+    });
+  }
+
+  _pinchDist() {
+    const [a, b] = [...this.pointers.values()];
+    return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
   // Smoothly snap the target to a world position (used when selecting a unit).

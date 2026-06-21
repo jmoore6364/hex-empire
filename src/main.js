@@ -297,3 +297,7 @@ window.addEventListener('resize', () => {
 
 // Select the starting settler so the player has something to do immediately.
 selectUnit(game.units[0]);
+
+// Debug / test handle: lets the headless smoke test (and the browser console)
+// inspect live game and camera state.
+window.__hex = { game, view, ui, camRig };

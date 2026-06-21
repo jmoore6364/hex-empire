@@ -27,7 +27,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 |---|---|
 | `WASD` / arrow keys | Pan the camera |
 | `Q` / `E` | Rotate |
-| Mouse wheel | Zoom |
+| Mouse wheel / trackpad / two-finger pinch | Zoom |
 | Right-drag | Orbit / tilt |
 | Left-click a unit | Select it (shows its movement range in white) |
 | Left-click a tile | Move the selected unit there (hover shows the path) |
