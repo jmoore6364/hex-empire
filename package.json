@@ -1,0 +1,13 @@
+{
+  "name": "hex-empire",
+  "version": "0.1.0",
+  "description": "A Civilization-like 3D hex-based 4X strategy game built with Three.js",
+  "type": "module",
+  "scripts": {
+    "start": "node server.mjs",
+    "test": "node test/logic.test.mjs"
+  },
+  "dependencies": {
+    "three": "^0.160.1"
+  }
+}

@@ -1,0 +1,230 @@
+// main.js — entry point. Builds the scene, generates the world, spawns the
+// starting units, and drives input + the render loop.
+import * as THREE from 'three';
+import { generateWorld, findStartTile } from './worldgen.js';
+import { neighbors, key, distance } from './hex.js';
+import { WorldView } from './world.js';
+import { Game } from './game.js';
+import { CameraRig } from './camera.js';
+import { UI } from './ui.js';
+
+const MAP_RADIUS = 12;
+
+// --- renderer / scene --------------------------------------------------------
+const app = document.getElementById('app');
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+app.appendChild(renderer.domElement);
+
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0x0a0e14);
+scene.fog = new THREE.Fog(0x0a0e14, 35, 70);
+
+const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+
+const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x35302a, 0.9);
+scene.add(hemi);
+const sun = new THREE.DirectionalLight(0xfff2e0, 1.1);
+sun.position.set(18, 30, 12);
+sun.castShadow = true;
+sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
+sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
+sun.shadow.camera.far = 120;
+scene.add(sun);
+
+// --- world & game ------------------------------------------------------------
+const seed = Math.floor(Math.random() * 1e9);
+const world = generateWorld(MAP_RADIUS, seed);
+const view = new WorldView(scene, world);
+view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
+
+const game = new Game(scene, view);
+const ui = new UI();
+
+// Spawn helpers: find a passable, unoccupied tile near a given hex.
+function freeNeighbor(q, r) {
+  for (const n of neighbors(q, r)) {
+    const t = world.tiles.get(key(n.q, n.r));
+    if (t && t.passable && !game.unitAt(n.q, n.r)) return n;
+  }
+  return { q, r };
+}
+
+const start = findStartTile(world);
+game.spawnUnit('settler', 0, start.q, start.r);
+const w1 = freeNeighbor(start.q, start.r);
+game.spawnUnit('warrior', 0, w1.q, w1.r);
+const s1 = freeNeighbor(w1.q, w1.r);
+game.spawnUnit('scout', 0, s1.q, s1.r);
+
+// AI starts on the far side of the continent.
+let aiStart = start, far = -1;
+for (const t of world.tiles.values()) {
+  if (!t.passable || t.terrain === 'MOUNTAIN') continue;
+  const d = distance(start, t);
+  if (d > far) { far = d; aiStart = t; }
+}
+game.spawnUnit('settler', 1, aiStart.q, aiStart.r);
+const aw = freeNeighbor(aiStart.q, aiStart.r);
+game.spawnUnit('warrior', 1, aw.q, aw.r);
+
+game.income = game.computeIncome();
+game.recomputeFog();
+ui.refreshTopbar(game);
+ui.hideLoading();
+
+const camRig = new CameraRig(camera, renderer.domElement, MAP_RADIUS * 1.7);
+{ const top = view.topOf(start.q, start.r); camRig.focus(top.x, top.z); }
+
+// --- selection & input -------------------------------------------------------
+const raycaster = new THREE.Raycaster();
+const ndc = new THREE.Vector2();
+let selected = null;
+let reachMap = new Map();
+
+function tileUnderPointer(ev) {
+  const rect = renderer.domElement.getBoundingClientRect();
+  ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
+  ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
+  raycaster.setFromCamera(ndc, camera);
+  const hits = raycaster.intersectObjects(view.group.children, false);
+  return hits.length ? hits[0].object.userData.tile : null;
+}
+
+function selectUnit(u) {
+  selected = u;
+  reachMap = game.reachableFor(u);
+  view.selectTile(u.q, u.r);
+  refreshUnitPanel();
+  drawOverlays(null);
+}
+
+function deselect() {
+  selected = null;
+  reachMap = new Map();
+  view.deselect();
+  view.clearHighlights();
+  ui.hideSelection();
+}
+
+function refreshUnitPanel() {
+  const actions = [];
+  if (selected.owner === 0 && selected.def.canFound) {
+    actions.push({
+      label: 'Found City', enabled: selected.move > 0 && !game.cityAt(selected.q, selected.r),
+      onClick: () => {
+        const res = game.foundCity(selected);
+        if (res.ok) { ui.toast(`${res.city.name} founded!`, '#7fd17f'); game.income = game.computeIncome(); ui.refreshTopbar(game); deselect(); }
+        else ui.toast(res.msg, '#e88');
+      },
+    });
+  }
+  actions.push({ label: 'Skip', enabled: true, onClick: deselect });
+  ui.showUnit(selected, actions);
+}
+
+function drawOverlays(hoverTile) {
+  view.clearHighlights();
+  if (!selected || selected.owner !== 0) return;
+  view.showReachable(reachMap);
+  if (hoverTile) {
+    const k = key(hoverTile.q, hoverTile.r);
+    if (reachMap.has(k)) {
+      const path = game.pathFor(selected, hoverTile.q, hoverTile.r);
+      if (path) view.showPath(path);
+    }
+  }
+}
+
+// Distinguish a click from a camera right-drag / sloppy pointer.
+let down = null;
+renderer.domElement.addEventListener('pointerdown', (e) => { down = { x: e.clientX, y: e.clientY, b: e.button }; });
+renderer.domElement.addEventListener('pointerup', (e) => {
+  if (!down || down.b !== 0) { down = null; return; }
+  const moved = Math.hypot(e.clientX - down.x, e.clientY - down.y);
+  down = null;
+  if (moved > 6) return; // it was a drag
+  handleClick(e);
+});
+
+renderer.domElement.addEventListener('pointermove', (e) => {
+  if (!selected) return;
+  drawOverlays(tileUnderPointer(e));
+});
+
+function handleClick(ev) {
+  const tile = tileUnderPointer(ev);
+  if (!tile) return;
+  const { q, r } = tile;
+
+  const unitHere = game.unitAt(q, r);
+  if (unitHere && unitHere.owner === 0 && unitHere !== selected && !unitHere.isMoving) {
+    selectUnit(unitHere);
+    return;
+  }
+
+  if (selected && selected.owner === 0 && !selected.isMoving) {
+    const res = game.tryMoveUnit(selected, q, r);
+    if (res.ok) {
+      if (res.combat) ui.toast(res.msg, '#ffb14a');
+      reachMap = game.reachableFor(selected);
+      view.selectTile(selected.q, selected.r);
+      if (game.units.includes(selected)) refreshUnitPanel(); else deselect();
+      drawOverlays(null);
+      ui.refreshTopbar(game);
+      return;
+    } else if (res.msg) {
+      ui.toast(res.msg, '#e88');
+    }
+  }
+
+  // Nothing actionable: show info about whatever is here.
+  const city = game.cityAt(q, r);
+  if (city && game.explored.has(key(q, r))) ui.showCity(city);
+  else ui.showTile(tile);
+}
+
+// --- turns -------------------------------------------------------------------
+function endTurn() {
+  if (game.units.some(u => u.isMoving)) return; // let animations settle
+  game.endTurn();
+  ui.refreshTopbar(game);
+  ui.toast(`Turn ${game.turn}`, '#9fd0ff');
+  if (selected && game.units.includes(selected)) {
+    reachMap = game.reachableFor(selected);
+    refreshUnitPanel();
+    drawOverlays(null);
+  } else {
+    deselect();
+  }
+}
+ui.onEndTurn(endTurn);
+window.addEventListener('keydown', (e) => {
+  if (e.code === 'Space') { e.preventDefault(); endTurn(); }
+  if (e.code === 'Escape') deselect();
+});
+
+// --- render loop -------------------------------------------------------------
+let last = performance.now();
+function animate(now) {
+  const dt = Math.min(0.05, (now - last) / 1000);
+  last = now;
+  camRig.update(dt);
+  for (const u of game.units) u.update(dt);
+  renderer.render(scene, camera);
+  requestAnimationFrame(animate);
+}
+requestAnimationFrame(animate);
+
+window.addEventListener('resize', () => {
+  camera.aspect = window.innerWidth / window.innerHeight;
+  camera.updateProjectionMatrix();
+  renderer.setSize(window.innerWidth, window.innerHeight);
+});
+
+// Select the starting settler so the player has something to do immediately.
+selectUnit(game.units[0]);
