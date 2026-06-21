@@ -173,11 +173,16 @@ export class Game {
       if (isRanged) this.fx.projectile(attacker.mesh.position, defender.mesh.position, OWNER_COLOR[attacker.owner]);
       else this.fx.lunge(attacker, defender.mesh.position);
       this.fx.flash(defender);
+      this.fx.spark(defender.mesh.position);
+      this.fx.damage(defender.mesh.position, '-' + res.dmgToDefender);
     }
 
     defender.hp -= res.dmgToDefender;
     let msg = `${attacker.def.name} ${isRanged ? 'shoots' : 'strikes'} ${defender.def.name}`;
-    if (defender.hp > 0 && res.dmgToAttacker) attacker.hp -= res.dmgToAttacker; // counterattack
+    if (defender.hp > 0 && res.dmgToAttacker) {
+      attacker.hp -= res.dmgToAttacker; // counterattack
+      if (this.fx) this.fx.damage(attacker.mesh.position, '-' + res.dmgToAttacker, '#ffd27f');
+    }
     attacker.move = 0;
     if (defender.hp <= 0) { this._removeUnit(defender); msg = `${defender.def.name} destroyed!`; }
     if (attacker.hp <= 0) { this._removeUnit(attacker); msg = `${attacker.def.name} lost in battle!`; }

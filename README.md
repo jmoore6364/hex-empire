@@ -89,8 +89,9 @@ on the far side of the continent.
 - **Ranged combat** — a new **Archer** strikes from 2 tiles away and takes no
   counterattack; melee units must close to an adjacent hex. Selected units paint
   their attackable enemies red.
-- **Combat animations** — melee units lunge, the defender flashes on the hit,
-  archers loose an arrow, and the slain fade and sink rather than popping out.
+- **Combat animations** — melee units lunge, archers loose an arrow, the
+  defender flashes with a spark burst and a floating "−N" damage number, and the
+  slain fade and sink rather than popping out.
 - **Terrain defense** — defenders on hills, forest and mountains take less
   damage, so where you fight matters.
 

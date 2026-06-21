@@ -8,6 +8,7 @@ export class Effects {
     this.scene = scene;
     this.active = [];
     this.projGeo = new THREE.SphereGeometry(0.07, 6, 6);
+    this.sparkGeo = new THREE.SphereGeometry(0.05, 5, 4);
   }
 
   // Attacker darts toward the defender and back.
@@ -35,6 +36,40 @@ export class Effects {
     mesh.position.copy(start);
     this.scene.add(mesh);
     this.active.push({ type: 'proj', mesh, start, end, t: 0, dur: 0.26 });
+  }
+
+  // A floating "-N" damage number that drifts up over a hit unit and fades.
+  damage(worldPos, text, color = '#ff6b6b') {
+    const c = document.createElement('canvas');
+    c.width = 128; c.height = 64;
+    const ctx = c.getContext('2d');
+    ctx.font = 'bold 46px Segoe UI, sans-serif';
+    ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.lineWidth = 7; ctx.strokeStyle = 'rgba(0,0,0,0.85)'; ctx.strokeText(text, 64, 34);
+    ctx.fillStyle = color; ctx.fillText(text, 64, 34);
+    const tex = new THREE.CanvasTexture(c);
+    const mat = new THREE.SpriteMaterial({ map: tex, transparent: true, depthTest: false });
+    const s = new THREE.Sprite(mat);
+    s.position.copy(worldPos); s.position.y += 1.0;
+    s.scale.set(1.2, 0.6, 1);
+    this.scene.add(s);
+    this.active.push({ type: 'dmg', mesh: s, mat, tex, t: 0, dur: 0.95, y0: s.position.y });
+  }
+
+  // A quick burst of sparks at the point of impact.
+  spark(worldPos, color = 0xffd27f) {
+    const bits = [];
+    const n = 7;
+    for (let i = 0; i < n; i++) {
+      const m = new THREE.Mesh(this.sparkGeo, new THREE.MeshBasicMaterial({ color, transparent: true }));
+      m.position.copy(worldPos); m.position.y += 0.5;
+      const ang = (i / n) * Math.PI * 2;
+      const sp = 1.6 + ((i * 37) % 10) / 10;
+      m.userData.v = new THREE.Vector3(Math.cos(ang) * sp, 2.0 + ((i * 53) % 10) / 10, Math.sin(ang) * sp);
+      this.scene.add(m);
+      bits.push(m);
+    }
+    this.active.push({ type: 'spark', bits, t: 0, dur: 0.45 });
   }
 
   // Take ownership of a dead unit's mesh and play it out, then dispose it.
@@ -78,6 +113,17 @@ export class Effects {
         e.mesh.position.y = e.y0 - p * 0.6;
         for (const m of e.mats) m.opacity = s;
         if (p >= 1) this._dispose(e.mesh);
+      } else if (e.type === 'dmg') {
+        e.mesh.position.y = e.y0 + p * 0.9;
+        e.mat.opacity = p < 0.6 ? 1 : 1 - (p - 0.6) / 0.4;
+        if (p >= 1) { this.scene.remove(e.mesh); e.mat.dispose(); e.tex.dispose(); }
+      } else if (e.type === 'spark') {
+        for (const b of e.bits) {
+          b.userData.v.y -= 7 * dt;                 // gravity
+          b.position.addScaledVector(b.userData.v, dt);
+          b.material.opacity = 1 - p;
+        }
+        if (p >= 1) for (const b of e.bits) { this.scene.remove(b); b.material.dispose(); } // shared geo kept
       }
 
       if (p >= 1) this.active.splice(i, 1);
