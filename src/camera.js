@@ -44,10 +44,11 @@ export class CameraRig {
   _panByScreen(dxPx, dyPx) {
     const k = 0.0026 * this.distance;            // world units per pixel
     const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-    // right vector = (cos, sin); forward vector = (sin, -cos) — match keyboard pan.
-    const right = dxPx, up = -dyPx;
-    const wx = -(right * cos + up * sin) * k;     // negate: target moves opposite the finger
-    const wz = -(right * sin + up * -cos) * k;
+    // Ground projections of the camera's screen axes:
+    //   screen-right = (cos, -sin),  screen-down = (sin, cos).
+    // Move the target opposite the finger's world displacement so the map follows.
+    const wx = -(dxPx * cos + dyPx * sin) * k;
+    const wz = -(dyPx * cos - dxPx * sin) * k;
     this.target.x = THREE.MathUtils.clamp(this.target.x + wx, -this.bounds, this.bounds);
     this.target.z = THREE.MathUtils.clamp(this.target.z + wz, -this.bounds, this.bounds);
   }
