@@ -14,10 +14,17 @@ import { ResearchPanel } from './researchui.js';
 
 const MAP_RADIUS = 12;
 
+// The actual *visible* viewport. On mobile, window.innerWidth/Height can report
+// the (larger) layout viewport when the page is zoomed, which would push the
+// rendered scene off into a corner; documentElement.clientWidth/Height tracks
+// what's really on screen.
+const vpW = () => document.documentElement.clientWidth || window.innerWidth;
+const vpH = () => document.documentElement.clientHeight || window.innerHeight;
+
 // --- renderer / scene --------------------------------------------------------
 const app = document.getElementById('app');
 const renderer = new THREE.WebGLRenderer({ antialias: true });
-renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.setSize(vpW(), vpH());
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
@@ -27,7 +34,7 @@ const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0e14);
 scene.fog = new THREE.Fog(0x0a0e14, 35, 70);
 
-const camera = new THREE.PerspectiveCamera(55, window.innerWidth / window.innerHeight, 0.1, 200);
+const camera = new THREE.PerspectiveCamera(55, vpW() / vpH(), 0.1, 200);
 
 const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x35302a, 0.9);
 scene.add(hemi);
@@ -347,11 +354,15 @@ function animate(now) {
 }
 requestAnimationFrame(animate);
 
-window.addEventListener('resize', () => {
-  camera.aspect = window.innerWidth / window.innerHeight;
+function onResize() {
+  const w = vpW(), h = vpH();
+  camera.aspect = w / h;
   camera.updateProjectionMatrix();
-  renderer.setSize(window.innerWidth, window.innerHeight);
-});
+  renderer.setSize(w, h);
+}
+window.addEventListener('resize', onResize);
+// visualViewport fires on mobile zoom/keyboard changes that don't trigger resize.
+if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
 // Select the starting settler so the player has something to do immediately.
 selectUnit(game.units[0]);
