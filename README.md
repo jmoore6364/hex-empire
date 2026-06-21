@@ -25,7 +25,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 
 | Input | Action |
 |---|---|
-| `WASD` / arrow keys | Pan the camera |
+| `WASD` / arrow keys / one-finger drag | Pan the camera |
 | `Q` / `E` | Rotate |
 | Mouse wheel / trackpad / two-finger pinch | Zoom |
 | Right-drag | Orbit / tilt |

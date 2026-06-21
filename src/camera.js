@@ -1,6 +1,6 @@
 // camera.js — an RTS-style camera rig: a ground target with yaw/pitch/zoom.
-// Keyboard pans the target, mouse wheel / trackpad / pinch zooms, right-drag
-// (or two-finger drag) orbits.
+// Keyboard (or one-finger touch drag) pans the target, mouse wheel / trackpad /
+// two-finger pinch zooms, right-drag orbits.
 import * as THREE from 'three';
 
 export class CameraRig {
@@ -20,9 +20,13 @@ export class CameraRig {
     this.lastX = 0;
     this.lastY = 0;
 
-    // Active touch/pen pointers for pinch-zoom (id -> {x, y}).
+    // Active touch/pen pointers (id -> {x, y}): one drives a one-finger pan,
+    // two drive a pinch-zoom.
     this.pointers = new Map();
     this._lastPinch = 0;             // previous two-finger distance, px
+    this._panOrigin = null;          // where a one-finger drag began
+    this._panLast = null;            // previous one-finger position
+    this._panning = false;           // past the tap/drag threshold?
 
     // Let us handle all touch gestures ourselves (no browser pan/zoom hijack).
     domElement.style.touchAction = 'none';
@@ -33,6 +37,19 @@ export class CameraRig {
 
   _zoomBy(amount) {
     this.distance = THREE.MathUtils.clamp(this.distance + amount, this.minDist, this.maxDist);
+  }
+
+  // Pan the ground target by a screen-space drag (pixels), "grabbing" the map so
+  // the world follows the finger. Scaled by zoom and rotated into the yaw frame.
+  _panByScreen(dxPx, dyPx) {
+    const k = 0.0026 * this.distance;            // world units per pixel
+    const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
+    // right vector = (cos, sin); forward vector = (sin, -cos) — match keyboard pan.
+    const right = dxPx, up = -dyPx;
+    const wx = -(right * cos + up * sin) * k;     // negate: target moves opposite the finger
+    const wz = -(right * sin + up * -cos) * k;
+    this.target.x = THREE.MathUtils.clamp(this.target.x + wx, -this.bounds, this.bounds);
+    this.target.z = THREE.MathUtils.clamp(this.target.z + wz, -this.bounds, this.bounds);
   }
 
   _bind() {
@@ -64,16 +81,33 @@ export class CameraRig {
       this._zoomBy(THREE.MathUtils.clamp(px * factor, -6, 6));
     }, { passive: false });
 
-    // --- Touch / pen: two-finger pinch to zoom ---
+    // --- Touch / pen: one-finger drag to pan, two-finger pinch to zoom ---
+    const PAN_THRESH = 6; // px; below this a touch stays a tap (so selection works)
     this.dom.addEventListener('pointerdown', (e) => {
       if (e.pointerType === 'mouse') return; // mouse handled above
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (this.pointers.size === 2) this._lastPinch = this._pinchDist();
+      if (this.pointers.size === 1) {
+        this._panOrigin = { x: e.clientX, y: e.clientY };
+        this._panLast = { x: e.clientX, y: e.clientY };
+        this._panning = false;
+      } else if (this.pointers.size === 2) {
+        this._lastPinch = this._pinchDist(); // a second finger turns it into a pinch
+        this._panning = false;
+      }
     });
     const endPointer = (e) => {
       if (!this.pointers.has(e.pointerId)) return;
       this.pointers.delete(e.pointerId);
       if (this.pointers.size < 2) this._lastPinch = 0;
+      if (this.pointers.size === 1) {
+        // Dropped from a pinch back to one finger — reseed the pan from it.
+        const p = [...this.pointers.values()][0];
+        this._panOrigin = { x: p.x, y: p.y };
+        this._panLast = { x: p.x, y: p.y };
+        this._panning = false;
+      } else if (this.pointers.size === 0) {
+        this._panning = false;
+      }
     };
     this.dom.addEventListener('pointerup', endPointer);
     this.dom.addEventListener('pointercancel', endPointer);
@@ -81,12 +115,26 @@ export class CameraRig {
     this.dom.addEventListener('pointermove', (e) => {
       if (!this.pointers.has(e.pointerId)) return;
       this.pointers.set(e.pointerId, { x: e.clientX, y: e.clientY });
-      if (this.pointers.size !== 2) return;
-      e.preventDefault();
-      const dist = this._pinchDist();
-      // Pinch apart (distance grows) zooms in; together zooms out.
-      if (this._lastPinch) this._zoomBy((this._lastPinch - dist) * 0.05 * (this.distance / 22));
-      this._lastPinch = dist;
+
+      if (this.pointers.size === 2) {
+        e.preventDefault();
+        const dist = this._pinchDist();
+        // Pinch apart (distance grows) zooms in; together zooms out.
+        if (this._lastPinch) this._zoomBy((this._lastPinch - dist) * 0.05 * (this.distance / 22));
+        this._lastPinch = dist;
+        return;
+      }
+
+      if (this.pointers.size === 1 && this._panOrigin) {
+        if (!this._panning && Math.hypot(e.clientX - this._panOrigin.x, e.clientY - this._panOrigin.y) > PAN_THRESH) {
+          this._panning = true; // it's a drag, not a tap
+        }
+        if (this._panning) {
+          e.preventDefault();
+          this._panByScreen(e.clientX - this._panLast.x, e.clientY - this._panLast.y);
+        }
+        this._panLast = { x: e.clientX, y: e.clientY };
+      }
     });
   }
 
