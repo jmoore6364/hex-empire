@@ -144,10 +144,12 @@ export class CameraRig {
     return Math.hypot(a.x - b.x, a.y - b.y);
   }
 
-  // Smoothly snap the target to a world position (used when selecting a unit).
-  focus(x, z) {
+  // Center the camera on a world position (used when selecting a unit). `y` is
+  // the tile-top height so elevated units sit at screen center, not above it.
+  focus(x, z, y = 0) {
     this.target.x = THREE.MathUtils.clamp(x, -this.bounds, this.bounds);
     this.target.z = THREE.MathUtils.clamp(z, -this.bounds, this.bounds);
+    this.target.y = y;
   }
 
   update(dt) {

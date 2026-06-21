@@ -88,8 +88,8 @@ const researchPanel = new ResearchPanel(game);
 researchPanel.onPick((id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); });
 researchPanel.syncButton();
 
-const camRig = new CameraRig(camera, renderer.domElement, MAP_RADIUS * 1.7);
-{ const top = view.topOf(start.q, start.r); camRig.focus(top.x, top.z); }
+const camRig = new CameraRig(camera, renderer.domElement, MAP_RADIUS * 2.1);
+{ const top = view.topOf(start.q, start.r); camRig.focus(top.x, top.z, top.y); }
 
 // --- selection & input -------------------------------------------------------
 const raycaster = new THREE.Raycaster();
@@ -121,7 +121,7 @@ function selectUnit(u, focus = false) {
   selectedCity = null;
   reachMap = game.reachableFor(u);
   view.selectTile(u.q, u.r);
-  if (focus) { const top = view.topOf(u.q, u.r); if (top) camRig.focus(top.x, top.z); }
+  if (focus) { const top = view.topOf(u.q, u.r); if (top) camRig.focus(top.x, top.z, top.y); }
   refreshUnitPanel();
   drawOverlays(null);
 }
