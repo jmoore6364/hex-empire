@@ -142,6 +142,12 @@ check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']
   const y2 = cityYields(center, owned, 2, ['granary']);
   // pop 2 works center + two best owned (food3, prod3): food=5 -> *1.25 = 6.25 -> 6
   check('granary boosts a city food yield', y2.food === 6);
+
+  // A city on barren terrain still makes at least 1 food and 1 production.
+  const barren = { yields: { food: 0, prod: 0, gold: 0 } };
+  const yb = cityYields(barren, [], 0, []);
+  check('a city always makes at least 1 production', yb.prod >= 1);
+  check('a city always makes at least 1 food', yb.food >= 1);
 }
 
 // --- resources ---

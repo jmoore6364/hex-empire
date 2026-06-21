@@ -22,6 +22,10 @@ export function cityYields(center, owned, population, buildings = []) {
     y.prod += t.yields.prod;
     y.gold += t.yields.gold;
   }
+  // A city center always works itself a little, so even cities on poor terrain
+  // feed their people and can build something (no infinite build times).
+  y.food = Math.max(1, y.food);
+  y.prod = Math.max(1, y.prod);
   y.gold += 1;                     // city tax
   y.science += 1 + population;     // research from population
 
