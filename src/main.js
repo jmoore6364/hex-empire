@@ -98,11 +98,12 @@ function tileUnderPointer(ev) {
   return hits.length ? hits[0].object.userData.tile : null;
 }
 
-function selectUnit(u) {
+function selectUnit(u, focus = false) {
   selected = u;
   selectedCity = null;
   reachMap = game.reachableFor(u);
   view.selectTile(u.q, u.r);
+  if (focus) { const top = view.topOf(u.q, u.r); if (top) camRig.focus(top.x, top.z); }
   refreshUnitPanel();
   drawOverlays(null);
 }
@@ -114,6 +115,28 @@ function deselect() {
   view.deselect();
   view.clearHighlights();
   ui.hideSelection();
+}
+
+// An "active" unit is one of yours that still has movement and isn't animating.
+function nextActiveUnit(after) {
+  const units = game.units;
+  if (!units.length) return null;
+  const isActive = (u) => u.owner === 0 && u.move > 0 && !u.isMoving;
+  const start = after ? units.indexOf(after) : -1;
+  for (let i = 1; i <= units.length; i++) {
+    const u = units[((start + i) % units.length + units.length) % units.length];
+    if (isActive(u)) return u;
+  }
+  return null;
+}
+
+// Jump selection to the next unit with moves left (panning to it); if there are
+// none, drop the selection and nudge the player to end the turn.
+function cycleToNextActive(prev) {
+  const next = nextActiveUnit(prev);
+  if (next && next !== prev) { selectUnit(next, true); return; }
+  deselect();
+  if (game.units.some(u => u.owner === 0)) ui.toast('No units left to move — Space to end turn', '#9fd0ff');
 }
 
 function selectCity(c) {
@@ -179,7 +202,7 @@ function refreshUnitPanel() {
       },
     });
   }
-  actions.push({ label: 'Skip', enabled: true, onClick: deselect });
+  actions.push({ label: 'Skip', enabled: true, onClick: () => cycleToNextActive(selected) });
   ui.showUnit(selected, actions);
 }
 
@@ -232,14 +255,20 @@ function handleClick(ev) {
   }
 
   if (selected && selected.owner === 0 && !selected.isMoving) {
+    const movedUnit = selected;
     const res = game.tryMoveUnit(selected, q, r);
     if (res.ok) {
       if (res.combat) ui.toast(res.msg, '#ffb14a');
-      reachMap = game.reachableFor(selected);
-      view.selectTile(selected.q, selected.r);
-      if (game.units.includes(selected)) refreshUnitPanel(); else deselect();
-      drawOverlays(null);
       ui.refreshTopbar(game);
+      // Keep directing this unit while it still has moves; otherwise advance.
+      if (game.units.includes(movedUnit) && movedUnit.move > 0) {
+        reachMap = game.reachableFor(movedUnit);
+        view.selectTile(movedUnit.q, movedUnit.r);
+        refreshUnitPanel();
+        drawOverlays(null);
+      } else {
+        cycleToNextActive(movedUnit);
+      }
       return;
     } else if (res.msg) {
       ui.toast(res.msg, '#e88');
@@ -275,6 +304,7 @@ ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
   if (e.code === 'Escape') deselect();
+  if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 
 // --- render loop -------------------------------------------------------------

@@ -38,7 +38,12 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | Left-click adjacent enemy | Attack |
 | **Found City** button | Settle your Settler on its current tile |
 | Left-click your city | Open it: queue units/buildings, choose research |
+| `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect |
+
+When a unit uses up its movement (or attacks), selection automatically advances
+to your next unit with moves left and the camera pans to it — so you can play a
+whole turn without hunting for idle units.
 
 Found a city, then click it: pick what to **build** (units, or buildings once
 their tech is researched) and what to **research** (spend banked science). Each
