@@ -1,7 +1,7 @@
 // Self-test for the pure-logic modules (no browser / Three needed).
 // Run with:  npm test
 import { neighbors, distance, hexToWorld, worldToHex, hexMap, key, hexesInRange } from '../src/hex.js';
-import { generateWorld, findStartTile, TERRAIN } from '../src/worldgen.js';
+import { generateWorld, findStartTile, connectedLand, TERRAIN } from '../src/worldgen.js';
 import { findPath, reachable } from '../src/pathfinding.js';
 import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
@@ -55,6 +55,20 @@ check('generation is deterministic per seed',
 
 const start = findStartTile(world);
 check('findStartTile returns a passable tile', start && start.passable);
+
+// --- archipelago: lakes & landmasses ---
+check('LAKE terrain is impassable water', TERRAIN.LAKE && TERRAIN.LAKE.passable === false);
+{
+  const wl = generateWorld(16, 1337);
+  const lakes = [...wl.tiles.values()].filter(t => t.terrain === 'LAKE');
+  check('lakes are enclosed (never touch the map border)',
+    lakes.every(t => neighbors(t.q, t.r).every(n => wl.tiles.has(key(n.q, n.r)))));
+  const land = [...wl.tiles.values()].find(t => t.passable);
+  const mass = connectedLand(wl.tiles, land);
+  check('connectedLand includes its start', mass.has(key(land.q, land.r)));
+  check('connectedLand returns only passable tiles', [...mass].every(k => wl.tiles.get(k).passable));
+  check('connectedLand is a subset of all land', mass.size <= [...wl.tiles.values()].filter(t => t.passable).length);
+}
 
 // --- pathfinding ---
 // Build a tiny hand-made grid so the path result is predictable.

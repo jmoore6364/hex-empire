@@ -58,9 +58,11 @@ far side of the continent.
 
 **Pass 1 — the playable core**
 
-- **3D hex map** — procedurally generated terrain (ocean, coast, plains,
-  grassland, forest, desert, tundra, snow, hills, mountains) as elevation-shaded
-  hex prisms. Deterministic per random seed each load.
+- **3D hex map** — a large procedurally generated **archipelago**: a main
+  continent ringed by ocean, scattered islands, and enclosed inland lakes, across
+  every terrain type (plains, grassland, forest, desert, tundra, snow, hills,
+  mountains). Rendered as a single InstancedMesh so even ~2000 tiles stay cheap.
+  Deterministic per random seed each load; both civs start on the main landmass.
 - **RTS camera** — pan / zoom / rotate / orbit.
 - **Fog of war** — unexplored hexes are dark, explored-but-unseen are dimmed,
   enemies hidden until spotted.

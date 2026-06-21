@@ -1,7 +1,7 @@
 // worldgen.js — procedural terrain generation. Pure logic, NO rendering deps.
 // Produces a Map of tile data keyed by "q,r" that the renderer turns into meshes.
 
-import { hexMap, key } from './hex.js';
+import { hexMap, key, neighbors } from './hex.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from './resources.js';
 
 // Terrain catalogue. `color` is consumed by the renderer; the gameplay fields
@@ -9,6 +9,7 @@ import { RESOURCES, resourcesForTerrain, applyResource } from './resources.js';
 export const TERRAIN = {
   OCEAN:     { name: 'Ocean',     color: 0x1b4f72, elevation: 0.00, passable: false, moveCost: 99, yields: { food: 1, prod: 0, gold: 1 } },
   COAST:     { name: 'Coast',     color: 0x2e86c1, elevation: 0.06, passable: false, moveCost: 99, yields: { food: 1, prod: 0, gold: 2 } },
+  LAKE:      { name: 'Lake',      color: 0x49b6e0, elevation: 0.09, passable: false, moveCost: 99, yields: { food: 2, prod: 0, gold: 1 } },
   BEACH:     { name: 'Beach',     color: 0xd9c77a, elevation: 0.10, passable: true,  moveCost: 1,  yields: { food: 1, prod: 0, gold: 0 } },
   GRASSLAND: { name: 'Grassland', color: 0x4f9d3a, elevation: 0.16, passable: true,  moveCost: 1,  yields: { food: 2, prod: 0, gold: 0 } },
   PLAINS:    { name: 'Plains',    color: 0x9bb53a, elevation: 0.18, passable: true,  moveCost: 1,  yields: { food: 1, prod: 1, gold: 0 } },
@@ -74,11 +75,11 @@ function fbm(noise, x, y, octaves = 4) {
 // --- World assembly ----------------------------------------------------------
 
 function pickTerrain(elevation, moisture, latitude) {
-  if (elevation < 0.34) return 'OCEAN';
-  if (elevation < 0.40) return 'COAST';
-  if (elevation < 0.44) return 'BEACH';
-  if (elevation > 0.82) return 'MOUNTAIN';
-  if (elevation > 0.68) return 'HILLS';
+  if (elevation < 0.42) return 'OCEAN';
+  if (elevation < 0.47) return 'COAST';
+  if (elevation < 0.50) return 'BEACH';
+  if (elevation > 0.84) return 'MOUNTAIN';
+  if (elevation > 0.70) return 'HILLS';
 
   // Cold poles.
   if (latitude > 0.78) return 'SNOW';
@@ -92,20 +93,28 @@ function pickTerrain(elevation, moisture, latitude) {
 }
 
 // Build the world. Returns { tiles: Map<"q,r", tile>, radius, seed }.
+// The shape is an archipelago: a solid main continent in the middle, scattered
+// islands around it, and enclosed inland water turned into lakes.
 export function generateWorld(radius = 12, seed = 1337) {
   const elevNoise = makeNoise(seed);
   const moistNoise = makeNoise(seed ^ 0x9e3779b9);
+  const detailNoise = makeNoise(seed ^ 0x85ebca6b);
   const tiles = new Map();
   const scale = 0.16;
 
   for (const { q, r } of hexMap(radius)) {
-    // Sample noise in axial space, biased downward near the map edge so the
-    // continent is ringed by ocean instead of running off the border.
     const nx = q + r / 2, ny = r;
-    let elevation = fbm(elevNoise, nx * scale + 10, ny * scale + 10, 5);
-    const edge = Math.hypot(nx, ny) / (radius * 1.15);
-    elevation -= Math.pow(Math.max(0, edge), 2.2) * 0.9;
-    elevation = Math.max(0, Math.min(1, elevation + 0.12));
+    // Broad landmasses, broken up by a finer detail octave into islands.
+    let elevation = fbm(elevNoise, nx * 0.10 + 10, ny * 0.10 + 10, 5);
+    const detail = fbm(detailNoise, nx * 0.26 + 80, ny * 0.26 + 80, 3);
+    elevation = elevation * 0.6 + detail * 0.4;
+
+    // Central bias: raise the middle into a main continent, sink the rim into
+    // ocean. Islands survive in the mid-ring where the detail noise pokes up.
+    const dist = Math.hypot(nx, ny) / radius;           // 0 center .. ~1 edge
+    elevation += (0.30 - dist) * 0.26;
+    elevation -= Math.pow(Math.max(0, dist - 0.46), 2) * 1.4;
+    elevation = Math.max(0, Math.min(1, elevation));
 
     const moisture = fbm(moistNoise, nx * scale + 50, ny * scale + 50, 4);
     const latitude = Math.min(1, Math.abs(r) / radius);
@@ -119,12 +128,62 @@ export function generateWorld(radius = 12, seed = 1337) {
       moisture,
       passable: def.passable,
       moveCost: def.moveCost,
-      yields: def.yields,   // shared base; cloned in placeResources if enriched
+      yields: def.yields,   // shared base; replaced for lakes / resources below
       resource: null,
     });
   }
+  classifyLakes(tiles);
   placeResources(tiles, seed);
   return { tiles, radius, seed };
+}
+
+// Water connected to the map border is sea; any water it can't reach is an
+// enclosed lake. Reclassifies enclosed OCEAN/COAST tiles to LAKE.
+function classifyLakes(tiles) {
+  const isWater = (t) => t && (t.terrain === 'OCEAN' || t.terrain === 'COAST');
+  const sea = new Set();
+  const stack = [];
+  for (const t of tiles.values()) {
+    if (!isWater(t)) continue;
+    const onBorder = neighbors(t.q, t.r).some(n => !tiles.has(key(n.q, n.r)));
+    if (onBorder) { const k = key(t.q, t.r); if (!sea.has(k)) { sea.add(k); stack.push(t); } }
+  }
+  while (stack.length) {
+    const t = stack.pop();
+    for (const n of neighbors(t.q, t.r)) {
+      const k = key(n.q, n.r);
+      const nt = tiles.get(k);
+      if (isWater(nt) && !sea.has(k)) { sea.add(k); stack.push(nt); }
+    }
+  }
+  for (const t of tiles.values()) {
+    if (isWater(t) && !sea.has(key(t.q, t.r))) {
+      t.terrain = 'LAKE';
+      t.passable = false;
+      t.moveCost = 99;
+      t.yields = TERRAIN.LAKE.yields;
+    }
+  }
+}
+
+// The set of passable land tile-keys reachable from `start` without crossing
+// water — i.e. one connected landmass.
+export function connectedLand(tiles, start) {
+  const seen = new Set();
+  const startK = key(start.q, start.r);
+  const startTile = tiles.get(startK);
+  if (!startTile || !startTile.passable) return seen;
+  seen.add(startK);
+  const stack = [start];
+  while (stack.length) {
+    const t = stack.pop();
+    for (const n of neighbors(t.q, t.r)) {
+      const k = key(n.q, n.r);
+      const nt = tiles.get(k);
+      if (nt && nt.passable && !seen.has(k)) { seen.add(k); stack.push(nt); }
+    }
+  }
+  return seen;
 }
 
 // Scatter special resources across eligible terrain, deterministically by seed.

@@ -1,7 +1,7 @@
 // main.js — entry point. Builds the scene, generates the world, spawns the
 // starting units, and drives input + the render loop.
 import * as THREE from 'three';
-import { generateWorld, findStartTile } from './worldgen.js';
+import { generateWorld, findStartTile, connectedLand } from './worldgen.js';
 import { neighbors, key, distance } from './hex.js';
 import { WorldView } from './world.js';
 import { Game } from './game.js';
@@ -12,7 +12,7 @@ import { BUILDINGS } from './buildings.js';
 import { Effects } from './effects.js';
 import { ResearchPanel } from './researchui.js';
 
-const MAP_RADIUS = 18;
+const MAP_RADIUS = 26;
 
 // The actual *visible* viewport. On mobile, window.innerWidth/Height can report
 // the (larger) layout viewport when the page is zoomed, which would push the
@@ -77,10 +77,13 @@ game.spawnUnit('warrior', 0, w1.q, w1.r);
 const s1 = freeNeighbor(w1.q, w1.r);
 game.spawnUnit('scout', 0, s1.q, s1.r);
 
-// AI starts on the far side of the continent.
+// AI starts on the far side of the *player's landmass* so the two can meet by
+// land (no naval movement yet — other islands are for exploring).
+const landmass = connectedLand(world.tiles, start);
 let aiStart = start, far = -1;
-for (const t of world.tiles.values()) {
-  if (!t.passable || t.terrain === 'MOUNTAIN') continue;
+for (const k of landmass) {
+  const t = world.tiles.get(k);
+  if (t.terrain === 'MOUNTAIN') continue;
   const d = distance(start, t);
   if (d > far) { far = d; aiStart = t; }
 }
@@ -121,8 +124,8 @@ function tileUnderPointer(ev) {
   ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
   ndc.y = -((ev.clientY - rect.top) / rect.height) * 2 + 1;
   raycaster.setFromCamera(ndc, camera);
-  const hits = raycaster.intersectObjects(view.group.children, false);
-  return hits.length ? hits[0].object.userData.tile : null;
+  const hits = raycaster.intersectObject(view.tileMesh, false);
+  return hits.length ? view.tileForInstance(hits[0].instanceId) : null;
 }
 
 function selectUnit(u, focus = false) {

@@ -17,32 +17,41 @@ export class WorldView {
     this.scene = scene;
     this.world = world;
     this.group = new THREE.Group();
-    this.tileMeshes = new Map();   // "q,r" -> Mesh
     this.tops = new Map();         // "q,r" -> top-center world position
     scene.add(this.group);
 
-    // Shared prism geometry; per-tile we only scale Y and recolor.
+    // Shared prism geometry; one InstancedMesh holds every tile so even large
+    // maps are a single draw call. Per-instance matrix encodes position/height;
+    // per-instance colour is recoloured for fog of war.
     this.geo = new THREE.CylinderGeometry(HEX_SIZE * 0.97, HEX_SIZE * 0.97, 1, 6);
 
-    // Resource markers: a small floating gem over tiles that carry a resource.
     this.resGeo = new THREE.OctahedronGeometry(0.17);
     this.resourceGroup = new THREE.Group();
     scene.add(this.resourceGroup);
     this.resourceMarkers = new Map();   // "q,r" -> marker mesh
 
-    for (const tile of world.tiles.values()) {
+    const tiles = [...world.tiles.values()];
+    const mat = new THREE.MeshStandardMaterial({ color: 0xffffff, flatShading: true, roughness: 0.95 });
+    this.tileMesh = new THREE.InstancedMesh(this.geo, mat, tiles.length);
+    this.tileMesh.castShadow = true;
+    this.tileMesh.receiveShadow = true;
+    this.instanceTiles = [];        // instance index -> tile
+    this.tileIndex = new Map();     // "q,r" -> instance index
+    this.baseColors = [];           // instance index -> THREE.Color
+
+    const m = new THREE.Matrix4(), pos = new THREE.Vector3(), quat = new THREE.Quaternion(), scl = new THREE.Vector3();
+    tiles.forEach((tile, i) => {
       const def = TERRAIN[tile.terrain];
       const h = tileHeight(tile);
-      const mat = new THREE.MeshStandardMaterial({ color: def.color, flatShading: true, roughness: 0.95 });
-      mat.userData.base = new THREE.Color(def.color);
-      const mesh = new THREE.Mesh(this.geo, mat);
       const { x, z } = hexToWorld(tile.q, tile.r);
-      mesh.position.set(x, h / 2, z);
-      mesh.scale.y = h;
-      mesh.userData.tile = tile;
-      this.group.add(mesh);
+      pos.set(x, h / 2, z); scl.set(1, h, 1);
+      this.tileMesh.setMatrixAt(i, m.compose(pos, quat, scl));
+      const base = new THREE.Color(def.color);
+      this.tileMesh.setColorAt(i, base);
       const k = key(tile.q, tile.r);
-      this.tileMeshes.set(k, mesh);
+      this.instanceTiles[i] = tile;
+      this.tileIndex.set(k, i);
+      this.baseColors[i] = base;
       this.tops.set(k, new THREE.Vector3(x, h, z));
 
       if (tile.resource) {
@@ -56,29 +65,31 @@ export class WorldView {
         this.resourceGroup.add(mk);
         this.resourceMarkers.set(k, mk);
       }
-    }
+    });
+    this.tileMesh.instanceMatrix.needsUpdate = true;
+    if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
+    this.group.add(this.tileMesh);
 
     this._initHighlights();
   }
 
   topOf(q, r) { return this.tops.get(key(q, r)); }
+  tileForInstance(id) { return this.instanceTiles[id]; }
 
   // --- Fog of war -----------------------------------------------------------
   // visible: Set of "q,r" in current sight; explored: Set ever-seen.
   applyFog(visible, explored) {
-    for (const [k, mesh] of this.tileMeshes) {
-      const base = mesh.material.userData.base;
-      if (visible.has(k)) {
-        mesh.material.color.copy(base);
-        mesh.material.emissive.setHex(0x000000);
-      } else if (explored.has(k)) {
-        mesh.material.color.copy(base).multiplyScalar(0.45); // dimmed memory
-      } else {
-        mesh.material.color.copy(UNEXPLORED);
-      }
+    const c = new THREE.Color();
+    for (const [k, i] of this.tileIndex) {
+      const base = this.baseColors[i];
+      if (visible.has(k)) c.copy(base);
+      else if (explored.has(k)) c.copy(base).multiplyScalar(0.45); // dimmed memory
+      else c.copy(UNEXPLORED);
+      this.tileMesh.setColorAt(i, c);
       const mk = this.resourceMarkers.get(k);
       if (mk) mk.visible = explored.has(k);
     }
+    if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
   }
 
   // --- Highlight overlays ---------------------------------------------------
