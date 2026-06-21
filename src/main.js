@@ -290,14 +290,12 @@ function endTurn() {
   ui.refreshTopbar(game);
   const ev = game.events;
   ui.toast(ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`, ev.length ? '#7fd17f' : '#9fd0ff');
+  // Keep a city panel open if you were managing one; otherwise start the turn on
+  // your first ready unit.
   if (selectedCity && game.cities.includes(selectedCity)) {
     refreshCityPanel();
-  } else if (selected && game.units.includes(selected)) {
-    reachMap = game.reachableFor(selected);
-    refreshUnitPanel();
-    drawOverlays(null);
   } else {
-    deselect();
+    cycleToNextActive(null);
   }
 }
 ui.onEndTurn(endTurn);
