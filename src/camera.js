@@ -13,7 +13,7 @@ export class CameraRig {
     this.pitch = 0.95;               // radians above the horizon
     this.distance = 22;
     this.minDist = 6;
-    this.maxDist = 60;
+    this.maxDist = Math.max(60, bounds * 2.3); // zoom out far enough to see big maps
 
     this.keys = new Set();
     this.dragging = false;

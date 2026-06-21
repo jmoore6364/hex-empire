@@ -12,7 +12,7 @@ import { BUILDINGS } from './buildings.js';
 import { Effects } from './effects.js';
 import { ResearchPanel } from './researchui.js';
 
-const MAP_RADIUS = 12;
+const MAP_RADIUS = 18;
 
 // The actual *visible* viewport. On mobile, window.innerWidth/Height can report
 // the (larger) layout viewport when the page is zoomed, which would push the
@@ -32,9 +32,10 @@ app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
 scene.background = new THREE.Color(0x0a0e14);
-scene.fog = new THREE.Fog(0x0a0e14, 35, 70);
+// Atmospheric fade scales with the map so the board stays visible when zoomed out.
+scene.fog = new THREE.Fog(0x0a0e14, MAP_RADIUS * 2.5, MAP_RADIUS * 8);
 
-const camera = new THREE.PerspectiveCamera(55, vpW() / vpH(), 0.1, 200);
+const camera = new THREE.PerspectiveCamera(55, vpW() / vpH(), 0.1, 300);
 
 const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x35302a, 0.9);
 scene.add(hemi);
@@ -42,9 +43,11 @@ const sun = new THREE.DirectionalLight(0xfff2e0, 1.1);
 sun.position.set(18, 30, 12);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
-sun.shadow.camera.left = -40; sun.shadow.camera.right = 40;
-sun.shadow.camera.top = 40; sun.shadow.camera.bottom = -40;
-sun.shadow.camera.far = 120;
+// Shadow frustum scales with the map so the whole board casts shadows.
+const SHADOW = MAP_RADIUS * 2.4;
+sun.shadow.camera.left = -SHADOW; sun.shadow.camera.right = SHADOW;
+sun.shadow.camera.top = SHADOW; sun.shadow.camera.bottom = -SHADOW;
+sun.shadow.camera.far = 160;
 scene.add(sun);
 
 // --- world & game ------------------------------------------------------------
