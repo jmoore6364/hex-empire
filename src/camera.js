@@ -163,8 +163,10 @@ export class CameraRig {
 
     if (dx || dz) {
       const sin = Math.sin(this.yaw), cos = Math.cos(this.yaw);
-      this.target.x = THREE.MathUtils.clamp(this.target.x + (dx * cos - dz * sin) * speed, -this.bounds, this.bounds);
-      this.target.z = THREE.MathUtils.clamp(this.target.z + (dx * sin + dz * cos) * speed, -this.bounds, this.bounds);
+      // Screen axes on the ground: right = (cos, -sin), down = (sin, cos).
+      // dx is screen-right intent, dz is screen-down intent.
+      this.target.x = THREE.MathUtils.clamp(this.target.x + (dx * cos + dz * sin) * speed, -this.bounds, this.bounds);
+      this.target.z = THREE.MathUtils.clamp(this.target.z + (dz * cos - dx * sin) * speed, -this.bounds, this.bounds);
     }
 
     // Place the camera on a sphere around the target.
