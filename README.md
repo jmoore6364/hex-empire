@@ -37,19 +37,22 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | Left-click a tile | Move the selected unit there (hover shows the path) |
 | Left-click adjacent enemy | Attack |
 | **Found City** button | Settle your Settler on its current tile |
-| Left-click your city | Open it: queue units/buildings, choose research |
+| Left-click your city | Open it: queue units/buildings |
+| **🔬 Research** button | Open the tech tree; click any tech to queue the path to it |
 | `Tab` / Skip | Jump to the next unit that still has moves |
-| `Space` | End turn · `Esc` deselect |
+| `Space` | End turn · `Esc` deselect / close drawer |
 
 When a unit uses up its movement (or attacks), selection automatically advances
 to your next unit with moves left and the camera pans to it — so you can play a
 whole turn without hunting for idle units.
 
-Found a city, then click it: pick what to **build** (units, or buildings once
-their tech is researched) and what to **research** (spend banked science). Each
-turn your cities work the tiles inside their borders, grow, and pour production
-into their queue. Expand with new Settlers and out-develop the **Crimson** AI civ
-on the far side of the continent.
+Found a city, then click it to pick what to **build** (units, or buildings once
+their tech is researched). Open the **🔬 Research** drawer to choose technology:
+click any tech — even a distant one like Flight — and the whole prerequisite path
+is queued automatically. Each turn your cities work the tiles inside their
+borders, grow, pour production into their queue, and bank science toward your
+research. Expand with new Settlers and out-develop the **Crimson** AI civ on the
+far side of the continent.
 
 ## What's implemented
 
@@ -71,8 +74,11 @@ on the far side of the continent.
 - **City production queues** — click a city to queue units (and, once unlocked,
   buildings). Production accumulates each turn from the city's prod yield; the
   build menu shows per-item turn estimates and completed units appear by the city.
-- **Tech tree** — a starter tree (Pottery → Writing/Bronze Working → Currency)
-  spent from banked science; each tech unlocks a building in the queue.
+- **Tech tree** — a multi-era technology tree (Ancient → Modern, ending at
+  Flight) in its own pop-out drawer with connector lines, à la Civ. Banked
+  science is spent down a **research queue**: click any tech and the full
+  prerequisite path is lined up; a toast and the drawer prompt you to pick the
+  next when one completes. Early techs unlock the buildings below.
 - **Buildings** — Granary (+food), Workshop (+prod), Market (+gold),
   Library (+science) multiply their city's yields.
 - **City territory** — each city claims the hexes within radius 2 (nearest city
@@ -116,6 +122,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/game.js` | Rules: turns, fog, founding, combat, the 4X economy, AI |
 | `src/camera.js` | RTS camera rig |
 | `src/ui.js` | HUD / selection panel (plain DOM) |
+| `src/researchui.js` | Pop-out tech-tree drawer (era columns, connectors, path queuing) |
 | `src/main.js` | Bootstrap: scene, lights, input, render loop |
 | `server.mjs` | Zero-dependency static server |
 | `test/logic.test.mjs` | Self-tests for the pure modules |

@@ -7,9 +7,10 @@ import { WorldView } from './world.js';
 import { Game } from './game.js';
 import { CameraRig } from './camera.js';
 import { UI } from './ui.js';
-import { TECHS, availableTechs } from './tech.js';
+import { availableTechs } from './tech.js';
 import { BUILDINGS } from './buildings.js';
 import { Effects } from './effects.js';
+import { ResearchPanel } from './researchui.js';
 
 const MAP_RADIUS = 12;
 
@@ -48,6 +49,7 @@ view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 const game = new Game(scene, view);
 game.fx = new Effects(scene);   // combat animations
 const ui = new UI();
+let researchNudged = false;     // so the "pick a tech" nudge only auto-opens once
 
 // Spawn helpers: find a passable, unoccupied tile near a given hex.
 function freeNeighbor(q, r) {
@@ -80,6 +82,11 @@ game.income = game.computeIncome();
 game.recomputeFog();
 ui.refreshTopbar(game);
 ui.hideLoading();
+
+// Research drawer (its own pop-out panel, not in the city menu).
+const researchPanel = new ResearchPanel(game);
+researchPanel.onPick((id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); });
+researchPanel.syncButton();
 
 const camRig = new CameraRig(camera, renderer.domElement, MAP_RADIUS * 1.7);
 { const top = view.topOf(start.q, start.r); camRig.focus(top.x, top.z); }
@@ -155,9 +162,6 @@ function refreshCityPanel() {
   const c = selectedCity;
   if (c.owner !== 0) { ui.showCity({ name: c.name, you: false, population: c.population, growth: { have: Math.floor(c.food), need: c.population * 10 } }); return; }
 
-  const civ = game.civs[0];
-  const researched = civ.research.researched;
-
   let producing = null;
   const queue = [];
   c.queue.forEach((it, i) => {
@@ -166,14 +170,10 @@ function refreshCityPanel() {
     else queue.push({ name: it.name, turns });
   });
 
-  const research = civ.research.current
-    ? { name: TECHS[civ.research.current].name, detail: `${Math.floor(civ.treasury.science)}/${TECHS[civ.research.current].cost}` }
-    : { name: 'None', detail: `${Math.floor(civ.treasury.science)} banked` };
-
   const model = {
     name: c.name, you: true, population: c.population,
     growth: { have: Math.floor(c.food), need: c.population * 10 },
-    yields: game.cityYields(c), producing, queue, research,
+    yields: game.cityYields(c), producing, queue,
     buildings: [...c.buildings].map(id => BUILDINGS[id].name),
   };
 
@@ -183,10 +183,6 @@ function refreshCityPanel() {
     if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
     const turns = game.turnsFor(c, item.cost, false);
     actions.push({ label: `⚒ ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
-  }
-  for (const id of availableTechs(researched)) {
-    if (id === civ.research.current) continue;
-    actions.push({ label: `🔬 ${TECHS[id].name} (${TECHS[id].cost})`, enabled: true, onClick: () => { game.setResearch(0, id); refreshCityPanel(); ui.refreshTopbar(game); } });
   }
   actions.push({ label: 'Close', enabled: true, onClick: deselect });
   ui.showCity(model, actions);
@@ -299,11 +295,22 @@ function endTurn() {
   } else {
     cycleToNextActive(null);
   }
+
+  // Research: keep the drawer/button current, and prompt for a new tech when the
+  // queue runs dry (just finished one, or you've never picked one).
+  researchPanel.syncButton();
+  if (researchPanel.isOpen) researchPanel.render();
+  const r0 = game.civs[0].research;
+  const canPick = game.cities.some(c => c.owner === 0) && availableTechs(r0.researched).length > 0;
+  if (!r0.queue.length && canPick) {
+    if (ev.some(m => m.startsWith('Researched'))) researchPanel.open();
+    else if (!researchNudged) { researchPanel.open(); researchNudged = true; }
+  }
 }
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') deselect();
+  if (e.code === 'Escape') { if (researchPanel.isOpen) researchPanel.close(); else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 

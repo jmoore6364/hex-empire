@@ -3,7 +3,7 @@
 import { neighbors, distance, hexToWorld, worldToHex, hexMap, key, hexesInRange } from '../src/hex.js';
 import { generateWorld, findStartTile, TERRAIN } from '../src/worldgen.js';
 import { findPath, reachable } from '../src/pathfinding.js';
-import { TECHS, canResearch, availableTechs } from '../src/tech.js';
+import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
 import { computeOwnership, ownedTiles } from '../src/territory.js';
 import { cityYields } from '../src/economy.js';
@@ -88,6 +88,18 @@ check('availableTechs is cheapest-first', (() => {
 check('availableTechs hides locked & known', (() => {
   const a = availableTechs(new Set(['pottery', 'writing']));
   return !a.includes('pottery') && !a.includes('writing') && a.includes('currency') && a.includes('bronze');
+})());
+check('pathTo a base tech is just itself', JSON.stringify(pathTo('pottery', new Set())) === JSON.stringify(['pottery']));
+check('pathTo includes prerequisites in order', JSON.stringify(pathTo('writing', new Set())) === JSON.stringify(['pottery', 'writing']));
+check('pathTo skips already-researched prereqs', JSON.stringify(pathTo('writing', new Set(['pottery']))) === JSON.stringify(['writing']));
+check('pathTo a known tech is empty', pathTo('pottery', new Set(['pottery'])).length === 0);
+check('pathTo flight ends at flight and pulls the whole chain', (() => {
+  const p = pathTo('flight', new Set());
+  if (p[p.length - 1] !== 'flight') return false;
+  if (!p.includes('pottery') || !p.includes('combustion')) return false;
+  // every tech appears after all of its prerequisites
+  const idx = Object.fromEntries(p.map((id, i) => [id, i]));
+  return p.every(id => TECHS[id].requires.every(req => idx[req] === undefined || idx[req] < idx[id]));
 })());
 
 // --- buildings ---

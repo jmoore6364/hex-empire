@@ -5,7 +5,7 @@
 import { key, distance, hexesInRange, neighbors } from './hex.js';
 import { findPath, reachable } from './pathfinding.js';
 import { Unit, City, UNIT_TYPES, OWNER_COLOR } from './units.js';
-import { TECHS, availableTechs } from './tech.js';
+import { TECHS, availableTechs, pathTo } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { computeOwnership, ownedTiles } from './territory.js';
 import { cityYields } from './economy.js';
@@ -32,8 +32,8 @@ export class Game {
     // Per-civ state: 0 = player, 1 = AI. Science accrues in treasury.science as a
     // research "bank" that is spent when the current tech's cost is met.
     this.civs = [
-      { owner: 0, name: 'Your Empire', treasury: { gold: 0, science: 0 }, research: { researched: new Set(), current: null } },
-      { owner: 1, name: 'Crimson',     treasury: { gold: 0, science: 0 }, research: { researched: new Set(), current: null } },
+      { owner: 0, name: 'Your Empire', treasury: { gold: 0, science: 0 }, research: { researched: new Set(), queue: [] } },
+      { owner: 1, name: 'Crimson',     treasury: { gold: 0, science: 0 }, research: { researched: new Set(), queue: [] } },
     ];
     this.treasury = this.civs[0].treasury; // back-compat alias for the HUD
   }
@@ -288,18 +288,27 @@ export class Game {
     }
   }
 
-  // Set / change a civ's current research target.
-  setResearch(owner, techId) { this.civs[owner].research.current = techId; }
+  // Queue the prerequisite path to a target tech (Civ-style: pick a distant tech
+  // and everything leading to it is lined up in order).
+  setResearchPath(owner, target) {
+    const civ = this.civs[owner];
+    civ.research.queue = pathTo(target, civ.research.researched);
+    return civ.research.queue;
+  }
+
+  // The tech currently being worked on (front of the queue), or null.
+  currentResearch(owner) { return this.civs[owner].research.queue[0] || null; }
 
   _processResearch(civ) {
-    const cur = civ.research.current;
-    if (!cur) return;
-    const tech = TECHS[cur];
-    if (civ.treasury.science >= tech.cost) {
+    const r = civ.research;
+    // Spend banked science down the queue; usually completes one tech per turn,
+    // but a big bank can clear several at once.
+    while (r.queue.length) {
+      const tech = TECHS[r.queue[0]];
+      if (civ.treasury.science < tech.cost) break;
       civ.treasury.science -= tech.cost;
-      civ.research.researched.add(cur);
-      civ.research.current = null;
-      if (civ.owner === 0) this.events.push(`Researched ${tech.name} (unlocks ${tech.unlocks})`);
+      r.researched.add(r.queue.shift());
+      if (civ.owner === 0) this.events.push(`Researched ${tech.name} — unlocks ${tech.unlocks}`);
     }
   }
 
@@ -343,9 +352,9 @@ export class Game {
     for (const u of this.units) if (u.owner === 1) u.move = u.def.move;
 
     // Research: always be working on the cheapest available tech.
-    if (!civ.research.current) {
+    if (!civ.research.queue.length) {
       const opts = availableTechs(civ.research.researched);
-      if (opts.length) civ.research.current = opts[0];
+      if (opts.length) civ.research.queue = [opts[0]];
     }
 
     // Production: decide what each idle AI city should build next.
