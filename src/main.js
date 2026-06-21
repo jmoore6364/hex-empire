@@ -252,7 +252,7 @@ function handleClick(ev) {
 
   const unitHere = game.unitAt(q, r);
   if (unitHere && unitHere.owner === 0 && unitHere !== selected && !unitHere.isMoving) {
-    selectUnit(unitHere);
+    selectUnit(unitHere, true); // center the camera on the tapped unit
     return;
   }
 
