@@ -98,6 +98,14 @@ let selected = null;
 let selectedCity = null;
 let reachMap = new Map();
 
+// Deferred "advance to next unit": set when a unit finishes acting, then carried
+// out by the render loop once movement and combat animations have settled, so
+// the camera doesn't jump mid-animation.
+let advancePending = false;
+let advancePrev = null;
+function advanceWhenIdle(prev) { advancePending = true; advancePrev = prev; }
+function sceneIsBusy() { return game.units.some(u => u.isMoving) || game.fx.active.length > 0; }
+
 function tileUnderPointer(ev) {
   const rect = renderer.domElement.getBoundingClientRect();
   ndc.x = ((ev.clientX - rect.left) / rect.width) * 2 - 1;
@@ -108,6 +116,7 @@ function tileUnderPointer(ev) {
 }
 
 function selectUnit(u, focus = false) {
+  advancePending = false;
   selected = u;
   selectedCity = null;
   reachMap = game.reachableFor(u);
@@ -118,6 +127,7 @@ function selectUnit(u, focus = false) {
 }
 
 function deselect() {
+  advancePending = false;
   selected = null;
   selectedCity = null;
   reachMap = new Map();
@@ -149,6 +159,7 @@ function cycleToNextActive(prev) {
 }
 
 function selectCity(c) {
+  advancePending = false;
   selected = null;
   reachMap = new Map();
   view.clearHighlights();
@@ -258,14 +269,17 @@ function handleClick(ev) {
     if (res.ok) {
       if (res.combat) ui.toast(res.msg, '#ffb14a');
       ui.refreshTopbar(game);
-      // Keep directing this unit while it still has moves; otherwise advance.
+      // Keep directing this unit while it still has moves; otherwise advance to
+      // the next unit once its move/fight animation has finished playing.
       if (game.units.includes(movedUnit) && movedUnit.move > 0) {
         reachMap = game.reachableFor(movedUnit);
         view.selectTile(movedUnit.q, movedUnit.r);
         refreshUnitPanel();
         drawOverlays(null);
       } else {
-        cycleToNextActive(movedUnit);
+        if (game.units.includes(movedUnit)) view.selectTile(movedUnit.q, movedUnit.r);
+        view.clearHighlights();   // drop stale range markers while it animates
+        advanceWhenIdle(movedUnit);
       }
       return;
     } else if (res.msg) {
@@ -293,7 +307,7 @@ function endTurn() {
   if (selectedCity && game.cities.includes(selectedCity)) {
     refreshCityPanel();
   } else {
-    cycleToNextActive(null);
+    advanceWhenIdle(null); // wait out the AI's move/fight animations first
   }
 
   // Research: keep the drawer/button current, and prompt for a new tech when the
@@ -322,6 +336,12 @@ function animate(now) {
   camRig.update(dt);
   for (const u of game.units) u.update(dt);
   game.fx.update(dt);
+  // Carry out a deferred unit-advance once everything has stopped animating.
+  if (advancePending && !sceneIsBusy()) {
+    const prev = advancePrev;
+    advancePending = false; advancePrev = null;
+    cycleToNextActive(prev);
+  }
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
