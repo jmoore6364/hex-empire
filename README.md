@@ -89,6 +89,8 @@ on the far side of the continent.
 - **Ranged combat** — a new **Archer** strikes from 2 tiles away and takes no
   counterattack; melee units must close to an adjacent hex. Selected units paint
   their attackable enemies red.
+- **Combat animations** — melee units lunge, the defender flashes on the hit,
+  archers loose an arrow, and the slain fade and sink rather than popping out.
 - **Terrain defense** — defenders on hills, forest and mountains take less
   damage, so where you fight matters.
 
@@ -107,6 +109,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/economy.js` | Per-city yield calculation (worked tiles + buildings) — *pure* |
 | `src/resources.js` | Tile resource catalogue & yield bonuses — *pure* |
 | `src/combat.js` | Terrain defense bonuses & attack resolution (incl. ranged) — *pure* |
+| `src/effects.js` | Short-lived combat visuals (lunge, hit-flash, projectile, death fade) |
 | `src/world.js` | Renders tile data into hex-prism meshes; fog, highlight & border overlays |
 | `src/units.js` | Unit & City classes — their 3D meshes and movement animation |
 | `src/game.js` | Rules: turns, fog, founding, combat, the 4X economy, AI |

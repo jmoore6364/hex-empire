@@ -167,6 +167,14 @@ export class Game {
   resolveCombat(attacker, defender, isRanged = false) {
     const dt = this.tiles.get(key(defender.q, defender.r));
     const res = resolveAttack(attacker.def.attack || 0, defender.def.attack || 0, dt ? dt.terrain : null, isRanged);
+
+    // Cosmetic combat animation (skipped in headless/logic contexts).
+    if (this.fx) {
+      if (isRanged) this.fx.projectile(attacker.mesh.position, defender.mesh.position, OWNER_COLOR[attacker.owner]);
+      else this.fx.lunge(attacker, defender.mesh.position);
+      this.fx.flash(defender);
+    }
+
     defender.hp -= res.dmgToDefender;
     let msg = `${attacker.def.name} ${isRanged ? 'shoots' : 'strikes'} ${defender.def.name}`;
     if (defender.hp > 0 && res.dmgToAttacker) attacker.hp -= res.dmgToAttacker; // counterattack
@@ -192,8 +200,9 @@ export class Game {
   }
 
   _removeUnit(unit) {
-    this.scene.remove(unit.mesh);
     this.units = this.units.filter(u => u !== unit);
+    if (this.fx) this.fx.death(unit.mesh); // play a death animation, then dispose
+    else this.scene.remove(unit.mesh);
   }
 
   // --- economy --------------------------------------------------------------

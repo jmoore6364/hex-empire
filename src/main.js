@@ -9,6 +9,7 @@ import { CameraRig } from './camera.js';
 import { UI } from './ui.js';
 import { TECHS, availableTechs } from './tech.js';
 import { BUILDINGS } from './buildings.js';
+import { Effects } from './effects.js';
 
 const MAP_RADIUS = 12;
 
@@ -45,6 +46,7 @@ const view = new WorldView(scene, world);
 view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 
 const game = new Game(scene, view);
+game.fx = new Effects(scene);   // combat animations
 const ui = new UI();
 
 // Spawn helpers: find a passable, unoccupied tile near a given hex.
@@ -312,6 +314,7 @@ function animate(now) {
   last = now;
   camRig.update(dt);
   for (const u of game.units) u.update(dt);
+  game.fx.update(dt);
   renderer.render(scene, camera);
   requestAnimationFrame(animate);
 }
