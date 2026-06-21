@@ -7,12 +7,22 @@ export const OWNER_COLOR = [0x3a78d0, 0xd04545]; // 0 = player, 1 = AI
 
 // Unit archetypes. `move` is movement points per turn; `sight` is fog reveal
 // radius; `cost` is production points to build one in a city; `range` (if > 1)
-// makes the unit attack from a distance without taking a counterattack.
+// makes the unit attack from a distance without taking a counterattack;
+// `requires` (if set) is the tech id that must be researched to build it.
 export const UNIT_TYPES = {
-  settler: { name: 'Settler', move: 2, sight: 2, hp: 10, cost: 30, canFound: true,  build: 'body' },
-  warrior: { name: 'Warrior', move: 2, sight: 2, hp: 20, cost: 20, attack: 6,      build: 'soldier' },
-  scout:   { name: 'Scout',   move: 4, sight: 3, hp: 10, cost: 16, attack: 2,      build: 'scout' },
-  archer:  { name: 'Archer',  move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2, build: 'archer' },
+  settler:    { name: 'Settler',     move: 2, sight: 2, hp: 10, cost: 30, canFound: true, build: 'body' },
+  warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier' },
+  scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout' },
+  archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer' },
+  // Tech-gated units.
+  horseman:   { name: 'Horseman',    move: 4, sight: 2, hp: 18, cost: 26, attack: 7,                requires: 'animal_husbandry', build: 'horseman' },
+  swordsman:  { name: 'Swordsman',   move: 2, sight: 2, hp: 30, cost: 32, attack: 11,               requires: 'iron_working',     build: 'soldier' },
+  catapult:   { name: 'Catapult',    move: 1, sight: 2, hp: 16, cost: 38, attack: 12, range: 2,     requires: 'the_wheel',        build: 'siege' },
+  crossbow:   { name: 'Crossbowman', move: 2, sight: 2, hp: 20, cost: 34, attack: 9,  range: 2,     requires: 'machinery',        build: 'archer' },
+  musketman:  { name: 'Musketman',   move: 2, sight: 2, hp: 40, cost: 46, attack: 15,               requires: 'gunpowder',        build: 'soldier' },
+  artillery:  { name: 'Artillery',   move: 1, sight: 2, hp: 22, cost: 50, attack: 18, range: 3,     requires: 'steel',            build: 'siege' },
+  tank:       { name: 'Tank',        move: 3, sight: 3, hp: 60, cost: 72, attack: 24,               requires: 'combustion',       build: 'tank' },
+  airplane:   { name: 'Airplane',    move: 6, sight: 4, hp: 30, cost: 64, attack: 18, range: 3,     requires: 'flight',           build: 'plane' },
 };
 
 let nextId = 1;
@@ -57,6 +67,46 @@ export class Unit {
       // a curved bow held to the side
       const bow = new THREE.Mesh(new THREE.TorusGeometry(0.24, 0.025, 6, 8, Math.PI), trim);
       bow.position.set(-0.2, 0.5, 0); bow.rotation.z = -Math.PI / 2; g.add(bow);
+    } else if (this.def.build === 'horseman') {
+      const horse = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.28, 0.22), mat);
+      horse.position.y = 0.5; g.add(horse);
+      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.3, 0.16), mat);
+      neck.position.set(0.26, 0.66, 0); g.add(neck);
+      const rider = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.15, 0.34, 6), trim);
+      rider.position.set(-0.04, 0.84, 0); g.add(rider);
+      for (const sx of [-0.18, 0.18]) for (const sz of [-0.08, 0.08]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.04, 0.04, 0.4, 4), mat);
+        leg.position.set(sx, 0.2, sz); g.add(leg);
+      }
+    } else if (this.def.build === 'siege') {
+      const base = new THREE.Mesh(new THREE.BoxGeometry(0.46, 0.2, 0.4), trim);
+      base.position.y = 0.34; g.add(base);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.1, 0.6, 8), mat);
+      barrel.rotation.z = Math.PI / 3; barrel.position.set(0.08, 0.62, 0); g.add(barrel);
+      for (const sx of [-0.18, 0.18]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.14, 0.14, 0.08, 10), mat);
+        w.rotation.x = Math.PI / 2; w.position.set(sx, 0.22, 0); g.add(w);
+      }
+    } else if (this.def.build === 'tank') {
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(0.62, 0.24, 0.4), mat);
+      hull.position.y = 0.36; g.add(hull);
+      const turret = new THREE.Mesh(new THREE.BoxGeometry(0.32, 0.18, 0.3), mat);
+      turret.position.y = 0.56; g.add(turret);
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.05, 0.05, 0.5, 6), trim);
+      barrel.rotation.z = Math.PI / 2; barrel.position.set(0.36, 0.56, 0); g.add(barrel);
+      for (const sz of [-0.22, 0.22]) {
+        const tread = new THREE.Mesh(new THREE.BoxGeometry(0.66, 0.16, 0.1), trim);
+        tread.position.set(0, 0.24, sz); g.add(tread);
+      }
+    } else if (this.def.build === 'plane') {
+      const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.13, 0.7, 8), trim);
+      fus.rotation.z = Math.PI / 2; fus.position.y = 0.75; g.add(fus);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.05, 0.82), mat);
+      wing.position.y = 0.75; g.add(wing);
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.22, 0.04), mat);
+      tail.position.set(-0.32, 0.84, 0); g.add(tail);
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 8), mat);
+      nose.rotation.z = -Math.PI / 2; nose.position.set(0.42, 0.75, 0); g.add(nose);
     } else { // settler — a little wagon
       const cart = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.34), mat);
       cart.position.y = 0.4; g.add(cart);

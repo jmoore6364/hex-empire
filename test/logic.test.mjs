@@ -185,6 +185,8 @@ check('an attack always does at least 1 damage', resolveAttack(1, 0, 'MOUNTAIN')
 check('melee provokes a counterattack', resolveAttack(6, 6, 'GRASSLAND', false).dmgToAttacker > 0);
 check('ranged takes no counterattack', resolveAttack(6, 6, 'GRASSLAND', true).dmgToAttacker === 0);
 check('an unarmed defender never counters', resolveAttack(6, 0, 'GRASSLAND', false).dmgToAttacker === 0);
+check('extra defense (walls/city) reduces damage', resolveAttack(12, 0, 'GRASSLAND', true, 1.75).dmgToDefender < resolveAttack(12, 0, 'GRASSLAND', true, 1).dmgToDefender);
+check('extra defense stacks with terrain', resolveAttack(20, 0, 'HILLS', true, 1.75).dmgToDefender < resolveAttack(20, 0, 'HILLS', true, 1).dmgToDefender);
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

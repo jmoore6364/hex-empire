@@ -79,8 +79,9 @@ far side of the continent.
   science is spent down a **research queue**: click any tech and the full
   prerequisite path is lined up; a toast and the drawer prompt you to pick the
   next when one completes. Early techs unlock the buildings below.
-- **Buildings** — Granary (+food), Workshop (+prod), Market (+gold),
-  Library (+science) multiply their city's yields.
+- **Buildings** — Granary/Aqueduct (+food), Workshop/Factory (+prod),
+  Market/Bank (+gold), Library/University (+science) multiply their city's
+  yields; City Walls fortify a garrison. Each is gated by its tech.
 - **City territory** — each city claims the hexes within radius 2 (nearest city
   wins contested tiles) and works the best of them by population. Owner-colored
   borders are drawn on the map.
@@ -98,6 +99,12 @@ far side of the continent.
 - **Combat animations** — melee units lunge, archers loose an arrow, the
   defender flashes with a spark burst and a floating "−N" damage number, and the
   slain fade and sink rather than popping out.
+- **Tech unlocks real power** — research opens up a progression of units, each
+  with its own low-poly model: Horseman, Swordsman, Catapult, Crossbowman,
+  Musketman, Artillery, Tank and the Airplane, alongside the economy/defense
+  buildings above. Units only appear in a city's build menu once their tech is in.
+- **City defense** — a unit garrisoned on its city takes reduced damage, and
+  City Walls (Masonry) make it tougher still.
 - **Terrain defense** — defenders on hills, forest and mountains take less
   damage, so where you fight matters.
 

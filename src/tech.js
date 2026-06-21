@@ -11,16 +11,16 @@ export const ERAS = ['Ancient', 'Classical', 'Medieval', 'Industrial', 'Modern']
 export const TECHS = {
   // Era I — Ancient
   pottery:           { name: 'Pottery',          era: 0, cost: 20,  requires: [],                              unlocks: 'Granary' },
-  animal_husbandry:  { name: 'Animal Husbandry', era: 0, cost: 20,  requires: [],                              unlocks: 'Pasture' },
+  animal_husbandry:  { name: 'Animal Husbandry', era: 0, cost: 20,  requires: [],                              unlocks: 'Horseman' },
   masonry:           { name: 'Masonry',          era: 0, cost: 25,  requires: [],                              unlocks: 'City Walls' },
   writing:           { name: 'Writing',          era: 0, cost: 30,  requires: ['pottery'],                     unlocks: 'Library' },
   bronze:            { name: 'Bronze Working',    era: 0, cost: 30,  requires: ['pottery'],                     unlocks: 'Workshop' },
 
   // Era II — Classical
   currency:          { name: 'Currency',         era: 1, cost: 55,  requires: ['writing'],                     unlocks: 'Market' },
-  the_wheel:         { name: 'The Wheel',        era: 1, cost: 55,  requires: ['animal_husbandry'],            unlocks: 'Roads' },
+  the_wheel:         { name: 'The Wheel',        era: 1, cost: 55,  requires: ['animal_husbandry'],            unlocks: 'Catapult' },
   iron_working:      { name: 'Iron Working',     era: 1, cost: 60,  requires: ['bronze'],                      unlocks: 'Swordsman' },
-  mathematics:       { name: 'Mathematics',      era: 1, cost: 70,  requires: ['writing', 'masonry'],          unlocks: 'Catapult' },
+  mathematics:       { name: 'Mathematics',      era: 1, cost: 70,  requires: ['writing', 'masonry'],          unlocks: 'University' },
 
   // Era III — Medieval
   engineering:       { name: 'Engineering',      era: 2, cost: 110, requires: ['mathematics', 'the_wheel'],    unlocks: 'Aqueduct' },
@@ -30,7 +30,7 @@ export const TECHS = {
 
   // Era IV — Industrial
   industrialization: { name: 'Industrialization', era: 3, cost: 210, requires: ['banking', 'machinery'],       unlocks: 'Factory' },
-  steel:             { name: 'Steel',            era: 3, cost: 220, requires: ['gunpowder', 'engineering'],    unlocks: 'Ironclad' },
+  steel:             { name: 'Steel',            era: 3, cost: 220, requires: ['gunpowder', 'engineering'],    unlocks: 'Artillery' },
   combustion:        { name: 'Combustion',       era: 3, cost: 280, requires: ['industrialization', 'steel'],  unlocks: 'Tank' },
 
   // Era V — Modern

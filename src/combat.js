@@ -22,10 +22,11 @@ export function defenseMultiplier(terrain) {
 //   defenderAtk     : defender's attack stat (0 for non-combatants)
 //   defenderTerrain : terrain key the defender stands on
 //   isRanged        : true if the attacker strikes from range (no counter)
+//   extraDef        : extra defensive multiplier (e.g. a garrisoned/walled city)
 // The counterattack is only meaningful if the defender survives the hit; the
 // caller checks that before applying `dmgToAttacker`.
-export function resolveAttack(attackerAtk, defenderAtk, defenderTerrain, isRanged = false) {
-  const defMul = defenseMultiplier(defenderTerrain);
+export function resolveAttack(attackerAtk, defenderAtk, defenderTerrain, isRanged = false, extraDef = 1) {
+  const defMul = defenseMultiplier(defenderTerrain) * extraDef;
   const dmgToDefender = Math.max(1, Math.round(attackerAtk / defMul));
   const dmgToAttacker = (!isRanged && defenderAtk) ? Math.round(defenderAtk * 0.6) : 0;
   return { dmgToDefender, dmgToAttacker, defMul };

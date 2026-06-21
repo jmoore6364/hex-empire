@@ -166,7 +166,11 @@ export class Game {
   // defender's terrain reduces the damage it takes.
   resolveCombat(attacker, defender, isRanged = false) {
     const dt = this.tiles.get(key(defender.q, defender.r));
-    const res = resolveAttack(attacker.def.attack || 0, defender.def.attack || 0, dt ? dt.terrain : null, isRanged);
+    // A unit defending its own city tile is harder to kill; City Walls more so.
+    const city = this.cityAt(defender.q, defender.r);
+    let extraDef = 1;
+    if (city && city.owner === defender.owner) extraDef = city.buildings.has('walls') ? 1.75 : 1.25;
+    const res = resolveAttack(attacker.def.attack || 0, defender.def.attack || 0, dt ? dt.terrain : null, isRanged, extraDef);
 
     // Cosmetic combat animation (skipped in headless/logic contexts).
     if (this.fx) {
@@ -233,11 +237,13 @@ export class Game {
   // buildings. Per-city filtering (already built / queued) happens in the UI.
   buildOptions(owner) {
     const civ = this.civs[owner];
+    const researched = civ.research.researched;
     const items = [];
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
+      if (def.requires && !researched.has(def.requires)) continue; // gated by tech
       items.push({ kind: 'unit', id, name: def.name, cost: def.cost });
     }
-    for (const id of unlockedBuildings(civ.research.researched)) {
+    for (const id of unlockedBuildings(researched)) {
       items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc });
     }
     return items;
@@ -368,7 +374,7 @@ export class Game {
       } else if (unlocked.length) {
         c.queue.push(this._aiItem('building', unlocked[0]));
       } else {
-        c.queue.push(this._aiItem('unit', ['warrior', 'archer', 'scout'][this.turn % 3]));
+        c.queue.push(this._aiItem('unit', this._aiBestUnit()));
       }
     }
 
@@ -417,5 +423,17 @@ export class Game {
   _aiItem(kind, id) {
     const def = kind === 'unit' ? UNIT_TYPES[id] : BUILDINGS[id];
     return { kind, id, name: def.name, cost: def.cost };
+  }
+
+  // The strongest combat unit the AI can currently build (by attack).
+  _aiBestUnit() {
+    const researched = this.civs[1].research.researched;
+    let best = 'warrior', bestAtk = 0;
+    for (const [id, def] of Object.entries(UNIT_TYPES)) {
+      if (!def.attack || def.canFound) continue;
+      if (def.requires && !researched.has(def.requires)) continue;
+      if (def.attack > bestAtk) { bestAtk = def.attack; best = id; }
+    }
+    return best;
   }
 }
