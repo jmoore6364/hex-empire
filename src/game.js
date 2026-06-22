@@ -29,6 +29,7 @@ export class Game {
     this.ownership = new Map();        // "q,r" -> owning city
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
+    this.gameOver = null;              // { win, reason } once the game is decided
 
     // Per-civ state: 0 = player, 1 = AI. Science accrues in treasury.science as a
     // research "bank" that is spent when the current tech's cost is met.
@@ -145,7 +146,8 @@ export class Game {
       return { ok: false, msg: 'Out of range' };
     }
     if (enemy && enemy.owner === unit.owner) return { ok: false, msg: 'Tile occupied' };
-    if (this.cityAt(q, r) && this.cityAt(q, r).owner !== unit.owner) return { ok: false, msg: 'Enemy city' };
+    const tcity = this.cityAt(q, r);
+    if (tcity && tcity.owner !== unit.owner) return this.attackCity(unit, tcity);
 
     const opts = this._moveOpts(unit);
     const path = findPath(this.tiles, unit, { q, r }, this.occupied(unit), opts);
@@ -178,6 +180,7 @@ export class Game {
     city.placeAt(this.view);
     this.scene.add(city.mesh);
     this.cities.push(city);
+    city.hp = this.cityMaxHp(city);
     this._removeUnit(unit);
     this.recomputeOwnership();
     this.recomputeFog();
@@ -214,7 +217,52 @@ export class Game {
     if (defender.hp <= 0) { this._removeUnit(defender); msg = `${defender.def.name} destroyed!`; }
     if (attacker.hp <= 0) { this._removeUnit(attacker); msg = `${attacker.def.name} lost in battle!`; }
     this.recomputeFog();
+    this._checkGameOver();
     return { ok: true, combat: true, msg };
+  }
+
+  // --- city assault --------------------------------------------------------
+  cityMaxHp(city) {
+    return 60 + city.population * 6 + (city.buildings.has('walls') ? 40 : 0);
+  }
+
+  // Attack an (undefended) enemy city. Ranged units bombard it; a melee unit
+  // that reduces it to 0 HP captures it and marches in.
+  attackCity(unit, city) {
+    if (!unit.def.attack) return { ok: false, msg: 'This unit cannot attack' };
+    if (unit.embarked) return { ok: false, msg: 'Cannot attack while embarked' };
+    const range = unit.def.range || 1;
+    const d = distance(unit, city);
+    if (d < 1 || d > range) return { ok: false, msg: 'Out of range' };
+
+    const dmg = Math.max(1, unit.def.attack);
+    city.hp = Math.max(0, city.hp - dmg);
+    unit.move = 0;
+    if (this.fx) {
+      if (range > 1 && d > 1) this.fx.projectile(unit.mesh.position, city.mesh.position, OWNER_COLOR[unit.owner]);
+      else this.fx.lunge(unit, city.mesh.position);
+      this.fx.flash(city);
+      this.fx.spark(city.mesh.position);
+      this.fx.damage(city.mesh.position, '-' + dmg);
+    }
+
+    let msg = `${city.name} besieged (${city.hp} HP)`;
+    const melee = range <= 1 && d === 1;
+    if (city.hp <= 0 && melee) { this._captureCity(city, unit.owner, unit); msg = `Captured ${city.name}!`; }
+    else if (city.hp <= 0) msg = `${city.name} breached — move a melee unit in to capture`;
+    this.recomputeFog();
+    this._checkGameOver();
+    return { ok: true, combat: true, msg };
+  }
+
+  _captureCity(city, newOwner, unit) {
+    city.setOwner(newOwner);
+    city.population = Math.max(1, city.population - 1);
+    city.hp = Math.round(this.cityMaxHp(city) * 0.5);
+    city.food = 0; city.production = 0; city.queue = [];
+    if (unit) { unit.enqueuePath([{ q: city.q, r: city.r }], this.view); unit.move = 0; }
+    this.recomputeOwnership();
+    this.events.push(newOwner === 0 ? `Captured ${city.name}!` : `${city.name} has fallen!`);
   }
 
   // Visible enemy units this unit could attack right now (melee or ranged).
@@ -227,6 +275,12 @@ export class Game {
       if (!this.visible.has(key(e.q, e.r))) continue;
       const d = distance(unit, e);
       if (d >= 1 && d <= range) out.push({ q: e.q, r: e.r });
+    }
+    for (const c of this.cities) {
+      if (c.owner === unit.owner || this.unitAt(c.q, c.r)) continue; // garrison shown via its unit
+      if (!this.visible.has(key(c.q, c.r))) continue;
+      const d = distance(unit, c);
+      if (d >= 1 && d <= range) out.push({ q: c.q, r: c.r });
     }
     return out;
   }
@@ -361,10 +415,21 @@ export class Game {
       const need = c.population * 10;
       if (c.food >= need) { c.food -= need; c.population++; }
       this._processProduction(c);
+      c.hp = Math.min(this.cityMaxHp(c), c.hp + 8); // walls heal between assaults
       civ.treasury.gold += y.gold;
       civ.treasury.science += y.science;
     }
     this._processResearch(civ);
+  }
+
+  // Decide the game once a civ is wiped out or someone reaches Flight.
+  _checkGameOver() {
+    if (this.gameOver) return;
+    const alive = (owner) => this.cities.some(c => c.owner === owner) || this.units.some(u => u.owner === owner);
+    if (this.civs[0].research.researched.has('flight')) this.gameOver = { win: true, reason: 'Flight achieved — your aircraft rule the skies!' };
+    else if (this.civs[1].research.researched.has('flight')) this.gameOver = { win: false, reason: 'Crimson reached Flight first.' };
+    else if (!alive(1)) this.gameOver = { win: true, reason: 'Crimson has been wiped from the map.' };
+    else if (!alive(0)) this.gameOver = { win: false, reason: 'Your empire has fallen.' };
   }
 
   // --- turns ----------------------------------------------------------------
@@ -380,6 +445,7 @@ export class Game {
     for (const u of this.units) if (u.owner === 0) u.move = u.def.move;
     this.recomputeOwnership();
     this.recomputeFog();
+    this._checkGameOver();
     return this.income;
   }
 
@@ -429,6 +495,11 @@ export class Game {
           .sort((a, b) => distance(u, a) - distance(u, b))
           .find(e => distance(u, e) >= 1 && distance(u, e) <= range);
         if (inReach) { this.resolveCombat(u, inReach, range > 1); continue; }
+        // Besiege an undefended player city within reach.
+        if (!u.embarked) {
+          const city = this.cities.find(c => c.owner === 0 && !this.unitAt(c.q, c.r) && distance(u, c) >= 1 && distance(u, c) <= range);
+          if (city) { this.attackCity(u, city); continue; }
+        }
         targets.sort((a, b) => distance(u, a) - distance(u, b));
         dest = targets[0];
       }

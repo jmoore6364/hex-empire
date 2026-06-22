@@ -46,6 +46,11 @@ When a unit uses up its movement (or attacks), selection automatically advances
 to your next unit with moves left and the camera pans to it — so you can play a
 whole turn without hunting for idle units.
 
+**Win** by wiping out the Crimson AI (capture every enemy city) or by being the
+first to research **Flight**; **lose** if you're eliminated or the AI gets Flight
+first. To take a city, batter it with attacks until its defense hits 0, then move
+a melee unit in to capture it — City Walls and a garrison make that much harder.
+
 Found a city, then click it to pick what to **build** (units, or buildings once
 their tech is researched). Open the **🔬 Research** drawer to choose technology:
 click any tech — even a distant one like Flight — and the whole prerequisite path
@@ -112,6 +117,11 @@ far side of the continent.
   water (they ride a little boat and are vulnerable at sea) and to build naval
   units in coastal cities: the **Galley**, and later the **Frigate**. Sail a
   Settler over to colonize the outer islands, or send a fleet to raid the coast.
+- **City capture & victory** — cities have defense HP (boosted by population and
+  City Walls) that regenerates between assaults. Wear a city down and march a
+  melee unit in to capture it. Win by **domination** (eliminate the AI) or by
+  reaching **Flight**; a game-over screen offers a fresh game. The AI besieges
+  your cities too.
 - **Terrain defense** — defenders on hills, forest and mountains take less
   damage, so where you fight matters.
 

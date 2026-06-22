@@ -66,6 +66,7 @@ export class UI {
     let h = '';
     h += row('Population', model.population);
     h += row('Growth', `${model.growth.have}/${model.growth.need}`, 'food');
+    if (model.defense) h += row('Defense', `${model.defense.hp}/${model.defense.max} HP`);
 
     if (model.you) {
       const y = model.yields;

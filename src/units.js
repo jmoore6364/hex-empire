@@ -194,6 +194,8 @@ export class City {
     this.production = 0;        // production points stockpiled toward queue[0]
     this.queue = [];            // build items: { kind:'unit'|'building', id, name, cost }
     this.buildings = new Set(); // constructed building ids
+    this.hp = 0;                // defence; set to max when founded (see game.js)
+    this.ownerMats = [];        // materials recoloured when the city changes hands
     this.mesh = this._build();
   }
 
@@ -211,10 +213,18 @@ export class City {
     });
     const banner = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.0, 4), wall);
     banner.position.y = 0.5; g.add(banner);
-    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.18), new THREE.MeshStandardMaterial({ color: OWNER_COLOR[this.owner], side: THREE.DoubleSide }));
+    const flagMat = new THREE.MeshStandardMaterial({ color: OWNER_COLOR[this.owner], side: THREE.DoubleSide });
+    const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.3, 0.18), flagMat);
     flag.position.set(0.15, 0.9, 0); g.add(flag);
     g.traverse(o => { if (o.isMesh) o.castShadow = true; });
+    this.ownerMats = [roof, flagMat];
     return g;
+  }
+
+  // Repaint the city's banner & roofs when it's captured.
+  setOwner(owner) {
+    this.owner = owner;
+    for (const m of this.ownerMats) m.color.setHex(OWNER_COLOR[owner]);
   }
 
   placeAt(worldView) {

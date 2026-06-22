@@ -96,6 +96,17 @@ game.recomputeFog();
 ui.refreshTopbar(game);
 ui.hideLoading();
 
+// Game-over overlay.
+function checkGameOver() {
+  if (!game.gameOver) return;
+  const t = document.getElementById('go-title');
+  t.textContent = game.gameOver.win ? '🏆 Victory!' : '💀 Defeat';
+  t.style.color = game.gameOver.win ? '#7fd17f' : '#e88';
+  document.getElementById('go-reason').textContent = game.gameOver.reason;
+  document.getElementById('gameover').style.display = 'flex';
+}
+document.getElementById('go-new').addEventListener('click', () => location.reload());
+
 // Research drawer (its own pop-out panel, not in the city menu).
 const researchPanel = new ResearchPanel(game);
 researchPanel.onPick((id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); });
@@ -184,7 +195,7 @@ function selectCity(c) {
 // Build the city-management model + its build/research buttons.
 function refreshCityPanel() {
   const c = selectedCity;
-  if (c.owner !== 0) { ui.showCity({ name: c.name, you: false, population: c.population, growth: { have: Math.floor(c.food), need: c.population * 10 } }); return; }
+  if (c.owner !== 0) { ui.showCity({ name: c.name, you: false, population: c.population, growth: { have: Math.floor(c.food), need: c.population * 10 }, defense: { hp: Math.round(c.hp), max: game.cityMaxHp(c) } }); return; }
 
   let producing = null;
   const queue = [];
@@ -197,6 +208,7 @@ function refreshCityPanel() {
   const model = {
     name: c.name, you: true, population: c.population,
     growth: { have: Math.floor(c.food), need: c.population * 10 },
+    defense: { hp: Math.round(c.hp), max: game.cityMaxHp(c) },
     yields: game.cityYields(c), producing, queue,
     buildings: [...c.buildings].map(id => BUILDINGS[id].name),
   };
@@ -284,6 +296,7 @@ function handleClick(ev) {
     if (res.ok) {
       if (res.combat) ui.toast(res.msg, '#ffb14a');
       ui.refreshTopbar(game);
+      checkGameOver();
       // Keep directing this unit while it still has moves; otherwise advance to
       // the next unit once its move/fight animation has finished playing.
       if (game.units.includes(movedUnit) && movedUnit.move > 0) {
@@ -306,7 +319,7 @@ function handleClick(ev) {
   const city = game.cityAt(q, r);
   if (city && game.explored.has(key(q, r))) {
     if (city.owner === 0) selectCity(city);
-    else ui.showCity({ name: city.name, you: false, population: city.population, growth: { have: Math.floor(city.food), need: city.population * 10 } });
+    else ui.showCity({ name: city.name, you: false, population: city.population, growth: { have: Math.floor(city.food), need: city.population * 10 }, defense: { hp: Math.round(city.hp), max: game.cityMaxHp(city) } });
   } else ui.showTile(tile);
 }
 
@@ -317,6 +330,7 @@ function endTurn() {
   ui.refreshTopbar(game);
   const ev = game.events;
   ui.toast(ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`, ev.length ? '#7fd17f' : '#9fd0ff');
+  checkGameOver();
   // Keep a city panel open if you were managing one; otherwise start the turn on
   // your first ready unit.
   if (selectedCity && game.cities.includes(selectedCity)) {
