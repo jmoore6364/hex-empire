@@ -15,13 +15,43 @@ import { Effects } from './effects.js';
 import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
 import { loadUnitModels } from './models.js';
+import { CIVILIZATIONS } from './civilizations.js';
 
-// Load rigged character models before spawning (falls back to procedural meshes
-// if unavailable or slow). Shown during the "Generating world…" splash.
-await Promise.race([loadUnitModels(), new Promise((r) => setTimeout(r, 6000))]);
+const FOG_REF = 30; // fog/shadow frustum sized for the largest map; world radius is chosen in the menu
 
-const MAP_RADIUS = 26;
-const NUM_AI = 2;       // rival AI civilizations (plus the human player)
+// Present the start menu and resolve with the player's choices. Resolves with
+// { load: true } when they pick Continue (resume the autosave).
+function chooseStartOptions() {
+  return new Promise((resolve) => {
+    const menu = document.getElementById('menu');
+    const cards = document.getElementById('civ-cards');
+    const cont = document.getElementById('menu-continue');
+    cont.style.display = localStorage.getItem('hexempire-save') ? '' : 'none';
+
+    let chosen = CIVILIZATIONS[0];
+    cards.innerHTML = '';
+    CIVILIZATIONS.forEach((c, idx) => {
+      const card = document.createElement('button');
+      card.className = 'civ-card' + (idx === 0 ? ' sel' : '');
+      const hex = '#' + c.color.toString(16).padStart(6, '0');
+      card.innerHTML = `<span class="sw" style="background:${hex}"></span><b>${c.name}</b><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span>`;
+      card.addEventListener('click', () => { chosen = c; cards.querySelectorAll('.civ-card').forEach(x => x.classList.remove('sel')); card.classList.add('sel'); });
+      cards.appendChild(card);
+    });
+
+    menu.style.display = 'flex';
+    document.getElementById('menu-start').onclick = () => {
+      menu.style.display = 'none';
+      resolve({
+        load: false, civ: chosen,
+        radius: +document.getElementById('opt-map').value,
+        numAI: +document.getElementById('opt-ai').value,
+        sound: document.getElementById('opt-sound').checked,
+      });
+    };
+    cont.onclick = () => { menu.style.display = 'none'; resolve({ load: true }); };
+  });
+}
 
 // The actual *visible* viewport. On mobile, window.innerWidth/Height can report
 // the (larger) layout viewport when the page is zoomed, which would push the
@@ -56,7 +86,7 @@ function gradientSky() {
 }
 scene.background = gradientSky();
 // Atmospheric fade scales with the map; tinted to the horizon so it blends in.
-scene.fog = new THREE.Fog(0x1a2c44, MAP_RADIUS * 2.8, MAP_RADIUS * 8.5);
+scene.fog = new THREE.Fog(0x1a2c44, FOG_REF * 2.8, FOG_REF * 8.5);
 
 const camera = new THREE.PerspectiveCamera(55, vpW() / vpH(), 0.1, 300);
 
@@ -68,29 +98,43 @@ sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
 sun.shadow.bias = -0.0004;
 // Shadow frustum scales with the map so the whole board casts shadows.
-const SHADOW = MAP_RADIUS * 2.4;
+const SHADOW = FOG_REF * 2.4;
 sun.shadow.camera.left = -SHADOW; sun.shadow.camera.right = SHADOW;
 sun.shadow.camera.top = SHADOW; sun.shadow.camera.bottom = -SHADOW;
 sun.shadow.camera.far = 160;
 scene.add(sun);
 
-// --- world & game ------------------------------------------------------------
-// Resume a saved game when the player chose Load; otherwise generate a fresh one.
-let saveData = null;
-try {
-  if (sessionStorage.getItem('hexempire-load')) {
-    const raw = localStorage.getItem('hexempire-save');
-    if (raw) saveData = JSON.parse(raw);
-  }
-} catch (e) { saveData = null; }
+// --- start menu -> world & game ----------------------------------------------
+// The old "Load" button reloads with this flag to jump straight back into a save.
+const directLoad = !!sessionStorage.getItem('hexempire-load');
 sessionStorage.removeItem('hexempire-load');
 
+const startOpts = directLoad ? { load: true } : await chooseStartOptions();
+document.getElementById('loading').style.display = 'flex'; // splash while we build
+
+// Load rigged character models now (during the splash); falls back to procedural.
+await Promise.race([loadUnitModels(), new Promise((r) => setTimeout(r, 6000))]);
+
+let saveData = null;
+if (startOpts.load) { try { saveData = JSON.parse(localStorage.getItem('hexempire-save') || 'null'); } catch (e) { saveData = null; } }
+
+const MAP_RADIUS = saveData ? (saveData.radius || 24) : startOpts.radius;
+const NUM_AI = saveData ? Math.max(1, (saveData.civs ? saveData.civs.length : 3) - 1) : startOpts.numAI;
+
+// The player's chosen civ sits at slot 0; the AIs take distinct other civs.
+let civConfigs = null;
+if (!saveData) {
+  const others = CIVILIZATIONS.filter(c => c.id !== startOpts.civ.id);
+  civConfigs = [startOpts.civ];
+  for (let i = 0; i < NUM_AI; i++) civConfigs.push(others[i % others.length]);
+}
+
 const seed = saveData ? saveData.seed : Math.floor(Math.random() * 1e9);
-const world = generateWorld(saveData ? (saveData.radius || MAP_RADIUS) : MAP_RADIUS, seed);
+const world = generateWorld(MAP_RADIUS, seed);
 const view = new WorldView(scene, world);
 view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 
-const game = new Game(scene, view, 1 + NUM_AI);
+const game = new Game(scene, view, saveData ? saveData.civs.length : 1 + NUM_AI, civConfigs);
 game.fx = new Effects(scene);   // combat animations
 const ui = new UI();
 let researchNudged = false;     // so the "pick a tech" nudge only auto-opens once
@@ -156,6 +200,7 @@ document.getElementById('go-new').addEventListener('click', () => location.reloa
 
 // Sound effects (synthesized; muteable).
 const sound = new Sound();
+if (!startOpts.load && startOpts.sound === false) sound.setEnabled(false); // honour the menu toggle
 const muteBtn = document.getElementById('mute-btn');
 muteBtn.textContent = sound.enabled ? '🔊' : '🔇';
 muteBtn.addEventListener('click', () => { sound.setEnabled(!sound.enabled); muteBtn.textContent = sound.enabled ? '🔊' : '🔇'; if (sound.enabled) sound.play('select'); });

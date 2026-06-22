@@ -100,12 +100,59 @@
     #go-reason { opacity: 0.85; margin-bottom: 18px; font-size: 14px; }
     #go-new { background: linear-gradient(180deg, #3a7d44, #2c5e34); color: #fff; border: 1px solid #4d9e5a;
       border-radius: 8px; padding: 12px 24px; font-size: 15px; font-weight: 600; cursor: pointer; }
+
+    #menu { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: radial-gradient(circle at 50% 28%, #16263a, #080b11 72%); z-index: 30; pointer-events: auto; overflow: auto; }
+    #menu .menu-card { text-align: center; padding: 26px 20px; max-width: 720px; width: 92vw; }
+    #menu h1 { font-size: 46px; letter-spacing: 7px; margin: 0; font-weight: 800;
+      background: linear-gradient(180deg, #cfe6ff, #5e96d8); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    #menu .menu-sub { opacity: .55; letter-spacing: 4px; margin: 8px 0 6px; font-size: 12px; }
+    #menu .menu-section { text-align: left; font-size: 11px; text-transform: uppercase; letter-spacing: 2px; opacity: .55; margin: 20px 0 8px; }
+    #civ-cards { display: grid; grid-template-columns: repeat(3, 1fr); gap: 8px; }
+    .civ-card { background: rgba(20,28,40,.7); border: 1px solid rgba(120,160,210,.2); border-radius: 10px;
+      padding: 12px 8px; cursor: pointer; text-align: center; color: #dce8f5; transition: border-color .15s, transform .1s; }
+    .civ-card:hover { transform: translateY(-2px); }
+    .civ-card.sel { border-color: #6fd0e8; box-shadow: inset 0 0 0 1px #6fd0e8, 0 6px 18px rgba(0,0,0,.45); }
+    .civ-card .sw { display: block; width: 32px; height: 32px; border-radius: 50%; margin: 0 auto 8px; box-shadow: 0 2px 6px rgba(0,0,0,.4); }
+    .civ-card b { display: block; font-size: 15px; }
+    .civ-card .tr { display: block; font-size: 12px; color: #ffd27f; margin-top: 4px; }
+    .civ-card .trd { display: block; font-size: 11px; opacity: .6; margin-top: 2px; line-height: 1.3; }
+    .menu-settings { display: flex; gap: 18px; flex-wrap: wrap; justify-content: center; }
+    .menu-settings label { font-size: 13px; display: flex; align-items: center; gap: 6px; }
+    .menu-settings select { background: #18222f; color: #dce8f5; border: 1px solid rgba(120,160,210,.3); border-radius: 6px; padding: 4px 8px; }
+    .menu-buttons { margin-top: 26px; display: flex; gap: 12px; justify-content: center; }
+    .menu-buttons button { border-radius: 8px; padding: 12px 28px; font-size: 16px; font-weight: 700; cursor: pointer; border: none; }
+    #menu-start { background: linear-gradient(180deg, #3a7d44, #2c5e34); color: #fff; }
+    #menu-continue { background: rgba(40,52,68,.9); color: #cfe0f5; border: 1px solid rgba(120,160,210,.3); }
   </style>
 </head>
 <body>
   <div id="app"></div>
 
   <div id="loading">Generating world…</div>
+
+  <div id="menu">
+    <div class="menu-card">
+      <h1>HEX EMPIRE</h1>
+      <div class="menu-sub">BUILD · RESEARCH · CONQUER</div>
+      <div class="menu-section">Choose your civilization</div>
+      <div id="civ-cards"></div>
+      <div class="menu-section">Settings</div>
+      <div class="menu-settings">
+        <label>Map
+          <select id="opt-map"><option value="18">Small</option><option value="24" selected>Medium</option><option value="30">Large</option></select>
+        </label>
+        <label>Opponents
+          <select id="opt-ai"><option>1</option><option selected>2</option><option>3</option><option>4</option></select>
+        </label>
+        <label><input type="checkbox" id="opt-sound" checked> Sound</label>
+      </div>
+      <div class="menu-buttons">
+        <button id="menu-start">⚔ Start Game</button>
+        <button id="menu-continue">▶ Continue</button>
+      </div>
+    </div>
+  </div>
 
   <div id="topbar" class="panel">
     <div class="stat"><span class="label">Turn</span><b id="turn">1</b></div>

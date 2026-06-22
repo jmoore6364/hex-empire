@@ -18,7 +18,7 @@ const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhol
 const CIV_NAMES = ['Your Empire', 'Crimson', 'Verdant', 'Amber', 'Violet'];
 
 export class Game {
-  constructor(scene, worldView, numCivs = 2) {
+  constructor(scene, worldView, numCivs = 2, civConfigs = null) {
     this.scene = scene;
     this.view = worldView;
     this.world = worldView.world;
@@ -39,8 +39,11 @@ export class Game {
     // research "bank" that is spent when the current tech's cost is met.
     this.civs = [];
     for (let i = 0; i < numCivs; i++) {
+      const cfg = civConfigs && civConfigs[i];
+      if (cfg && cfg.color != null) OWNER_COLOR[i] = cfg.color; // recolour to the chosen civ
       this.civs.push({
-        owner: i, name: CIV_NAMES[i] || `Civ ${i}`,
+        owner: i, name: (cfg && cfg.name) || CIV_NAMES[i] || `Civ ${i}`,
+        trait: (cfg && cfg.trait) || null,
         treasury: { gold: 0, science: 0, culture: 0 },
         research: { researched: new Set(), queue: [] },
         civics: { researched: new Set(), queue: [] },
@@ -367,6 +370,7 @@ export class Game {
         else mods[k] = eff[k];
       }
     };
+    merge(civ.trait?.effect);
     merge(GOVERNMENTS[civ.government]?.bonus);
     for (const id of civ.policies) merge(POLICIES[id]?.effect);
     return mods;
@@ -590,7 +594,8 @@ export class Game {
       explored: [...this.explored],
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, queue: c.queue, buildings: [...c.buildings] })),
-      civs: this.civs.map(v => ({
+      civs: this.civs.map((v, i) => ({
+        name: v.name, trait: v.trait, color: OWNER_COLOR[i],
         treasury: { ...v.treasury },
         research: { researched: [...v.research.researched], queue: [...v.research.queue] },
         civics: { researched: [...v.civics.researched], queue: [...v.civics.queue] },
@@ -611,6 +616,9 @@ export class Game {
     this.turn = data.turn;
     this.cityNameIdx = data.cityNameIdx || 0;
     this.explored = new Set(data.explored || []);
+
+    // Restore civ colours before rebuilding meshes (they read OWNER_COLOR).
+    (data.civs || []).forEach((cd, i) => { if (cd && cd.color != null) OWNER_COLOR[i] = cd.color; });
 
     for (const cd of data.cities) {
       const city = new City(cd.owner, cd.q, cd.r, cd.name);
@@ -634,6 +642,8 @@ export class Game {
       v.civics.queue = (cd.civics && cd.civics.queue) || [];
       v.government = cd.government || 'chiefdom';
       v.policies = cd.policies || [];
+      if (cd.name) v.name = cd.name;
+      if ('trait' in cd) v.trait = cd.trait;
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);

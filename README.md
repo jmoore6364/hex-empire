@@ -65,6 +65,17 @@ civilizations** spread across the map — who also war with each other.
 
 ## What's implemented
 
+**Start menu & setup**
+
+- **Title screen** — a start menu with a **civilization picker** (six civs, each
+  with its own colour and a unique **trait** — Seafarers −30% settler cost,
+  Warmongers +3 combat, Cultivators +15% food, Merchants +25% gold, Scholars
+  +25% science, Industrious +15% production), plus **settings**: map size
+  (Small/Medium/Large), number of AI opponents (1–4), and sound on/off. Your
+  chosen civ sets your colour and bonus; the AIs take distinct civs. **Continue**
+  resumes the autosave. Traits fold straight into the modifier system, so they
+  apply to yields, combat and unit costs everywhere.
+
 **Pass 1 — the playable core**
 
 - **3D hex map** — a large procedurally generated **archipelago**: a main

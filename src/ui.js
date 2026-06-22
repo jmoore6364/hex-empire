@@ -19,6 +19,7 @@ export class UI {
 
   refreshTopbar(game) {
     $('turn').textContent = game.turn;
+    if (game.civs && game.civs[0]) $('civname').textContent = game.civs[0].name;
     $('food').textContent = '+' + game.income.food;
     $('prod').textContent = '+' + game.income.prod;
     $('gold').textContent = Math.round(game.treasury.gold) + ' (+' + game.income.gold + ')';
