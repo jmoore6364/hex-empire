@@ -140,6 +140,7 @@ export function generateWorld(radius = 12, seed = 1337) {
     });
   }
   classifyLakes(tiles);
+  placeBeaches(tiles);
   const rivers = placeRivers(tiles, seed);
   placeResources(tiles, seed);
   return { tiles, radius, seed, rivers };
@@ -218,6 +219,18 @@ function classifyLakes(tiles) {
       t.yields = TERRAIN.LAKE.yields;
     }
   }
+}
+
+// Sandy shoreline: open land directly touching the sea becomes a beach, so every
+// continent and island gets a clear sandy coast ring.
+function placeBeaches(tiles) {
+  const sandable = new Set(['GRASSLAND', 'PLAINS', 'DESERT', 'TUNDRA']);
+  const shore = [];
+  for (const t of tiles.values()) {
+    if (!sandable.has(t.terrain)) continue;
+    if (neighbors(t.q, t.r).some(n => { const nt = tiles.get(key(n.q, n.r)); return nt && (nt.terrain === 'OCEAN' || nt.terrain === 'COAST'); })) shore.push(t);
+  }
+  for (const t of shore) { t.terrain = 'BEACH'; t.passable = true; t.moveCost = 1; t.yields = TERRAIN.BEACH.yields; }
 }
 
 // The set of passable land tile-keys reachable from `start` without crossing

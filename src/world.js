@@ -107,6 +107,10 @@ export class WorldView {
     if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
     this.group.add(this.tileMesh);
 
+    // Water tiles, for the shimmer animation.
+    this.waterCells = [];
+    this.instanceTiles.forEach((t, i) => { if (WATER.has(t.terrain)) this.waterCells.push({ i, k: key(t.q, t.r) }); });
+
     // Rivers: blue channels following their downhill chains.
     if (world.rivers && world.rivers.length) {
       const riverGroup = new THREE.Group();
@@ -182,26 +186,25 @@ export class WorldView {
     make(mountainGeo(), peaks);
   }
 
-  // Gentle shimmer on the water tiles currently in view (cheap — only the small
-  // visible set). Called each frame from the render loop.
+  // Shimmer every explored water tile each frame (in-sight ones bright, the rest
+  // dimmed like the fog). Cheap: just colour writes over the water-cell list.
   animateWater(time) {
-    if (!this.visibleNow) return;
+    if (!this.exploredNow || !this.waterCells) return;
     const c = new THREE.Color();
-    let touched = false;
-    for (const k of this.visibleNow) {
-      const i = this.tileIndex.get(k);
-      if (i === undefined || !WATER.has(this.instanceTiles[i].terrain)) continue;
-      const f = 0.9 + 0.13 * Math.sin(time * 1.5 + (i % 17));
+    for (const { i, k } of this.waterCells) {
+      if (!this.exploredNow.has(k)) continue; // unexplored stays dark
+      const dim = this.visibleNow && this.visibleNow.has(k) ? 1 : 0.45;
+      const f = dim * (0.82 + 0.2 * Math.sin(time * 1.3 + i * 0.7));
       this.tileMesh.setColorAt(i, c.copy(this.baseColors[i]).multiplyScalar(f));
-      touched = true;
     }
-    if (touched && this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
+    if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
   }
 
   // --- Fog of war -----------------------------------------------------------
   // visible: Set of "q,r" in current sight; explored: Set ever-seen.
   applyFog(visible, explored) {
     this.visibleNow = visible;
+    this.exploredNow = explored;
     const c = new THREE.Color();
     for (const [k, i] of this.tileIndex) {
       const base = this.baseColors[i];
