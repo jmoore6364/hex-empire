@@ -34,7 +34,7 @@ function chooseStartOptions() {
       const card = document.createElement('button');
       card.className = 'civ-card' + (idx === 0 ? ' sel' : '');
       const hex = '#' + c.color.toString(16).padStart(6, '0');
-      card.innerHTML = `<span class="sw" style="background:${hex}"></span><b>${c.name}</b><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span>`;
+      card.innerHTML = `<span class="sw" style="background:${hex}"></span><b>${c.name}</b><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span><span class="trd">⚔ ${c.unique}</span>`;
       card.addEventListener('click', () => { chosen = c; cards.querySelectorAll('.civ-card').forEach(x => x.classList.remove('sel')); card.classList.add('sel'); });
       cards.appendChild(card);
     });

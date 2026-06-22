@@ -51,6 +51,7 @@ export class Game {
       if (cfg && cfg.color != null) OWNER_COLOR[i] = cfg.color; // recolour to the chosen civ
       this.civs.push({
         owner: i, name: (cfg && cfg.name) || CIV_NAMES[i] || `Civ ${i}`,
+        id: (cfg && cfg.id) || null,   // civilization id, for unique units
         trait: (cfg && cfg.trait) || null,
         treasury: { gold: 0, science: 0, culture: 0 },
         research: { researched: new Set(), queue: [] },
@@ -435,7 +436,8 @@ export class Game {
     const researched = civ.research.researched;
     const items = [];
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
-      if (def.requires && !researched.has(def.requires)) continue; // gated by tech
+      if (def.requires && !researched.has(def.requires)) continue;        // gated by tech
+      if (def.onlyCiv && def.onlyCiv !== civ.id) continue;                // another civ's unique
       items.push({ kind: 'unit', id, name: def.name, cost: def.cost, domain: def.domain });
     }
     for (const id of unlockedBuildings(researched, civ.civics.researched)) {
@@ -617,7 +619,7 @@ export class Game {
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, borderRadius: c.borderRadius, borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
-        name: v.name, trait: v.trait, color: OWNER_COLOR[i],
+        name: v.name, id: v.id, trait: v.trait, color: OWNER_COLOR[i],
         treasury: { ...v.treasury },
         research: { researched: [...v.research.researched], queue: [...v.research.queue] },
         civics: { researched: [...v.civics.researched], queue: [...v.civics.queue] },
@@ -668,6 +670,7 @@ export class Game {
       v.government = cd.government || 'chiefdom';
       v.policies = cd.policies || [];
       if (cd.name) v.name = cd.name;
+      if ('id' in cd) v.id = cd.id;
       if ('trait' in cd) v.trait = cd.trait;
     });
     this.treasury = this.civs[0].treasury;
@@ -860,6 +863,7 @@ export class Game {
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
       if (!def.attack || def.canFound || def.domain === 'sea') continue; // AI builds land units
       if (def.requires && !researched.has(def.requires)) continue;
+      if (def.onlyCiv && def.onlyCiv !== this.civs[owner].id) continue;  // only its own unique
       if (def.attack > bestAtk) { bestAtk = def.attack; best = id; }
     }
     return best;

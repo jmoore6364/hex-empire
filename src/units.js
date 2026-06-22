@@ -28,6 +28,15 @@ export const UNIT_TYPES = {
   // Naval units (domain 'sea') — built only in coastal cities, move on water.
   galley:     { name: 'Galley',      move: 4, sight: 3, hp: 24, cost: 30, attack: 8,                requires: 'sailing',  domain: 'sea', build: 'ship' },
   frigate:    { name: 'Frigate',     move: 5, sight: 3, hp: 34, cost: 50, attack: 16, range: 2,     requires: 'gunpowder', domain: 'sea', build: 'ship' },
+
+  // Civilization-unique units (`onlyCiv`): a buffed variant only that civ can
+  // build, replacing/upgrading a base unit for its play-style.
+  berserker:  { name: 'Berserker',   move: 2, sight: 2, hp: 26, cost: 22, attack: 10,              onlyCiv: 'crimson', build: 'soldier', model: 'robot' },
+  longship:   { name: 'Longship',    move: 5, sight: 3, hp: 32, cost: 28, attack: 11,              onlyCiv: 'azure', requires: 'sailing', domain: 'sea', build: 'ship' },
+  ranger:     { name: 'Ranger',      move: 4, sight: 3, hp: 18, cost: 22, attack: 6, range: 2,     onlyCiv: 'verdant', build: 'archer' },
+  mercenary:  { name: 'Mercenary',   move: 2, sight: 2, hp: 32, cost: 28, attack: 12,              onlyCiv: 'amber', requires: 'iron_working', build: 'soldier', model: 'robot' },
+  arbalest:   { name: 'Arbalest',    move: 2, sight: 2, hp: 22, cost: 32, attack: 11, range: 2,    onlyCiv: 'violet', requires: 'machinery', build: 'archer' },
+  bombard:    { name: 'Bombard',     move: 1, sight: 2, hp: 20, cost: 36, attack: 15, range: 2,    onlyCiv: 'onyx', requires: 'the_wheel', build: 'siege' },
 };
 
 // Shared boat hull shown under a land unit while it's embarked at sea.

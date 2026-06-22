@@ -70,7 +70,9 @@ civilizations** spread across the map — who also war with each other.
 - **Title screen** — a start menu with a **civilization picker** (six civs, each
   with its own colour and a unique **trait** — Seafarers −30% settler cost,
   Warmongers +3 combat, Cultivators +15% food, Merchants +25% gold, Scholars
-  +25% science, Industrious +15% production), plus **settings**: map size
+  +25% science, Industrious +15% production) **and a unique unit only that civ can
+  build** (Azure Longship, Crimson Berserker, Verdant Ranger, Amber Mercenary,
+  Violet Arbalest, Onyx Bombard), plus **settings**: map size
   (Small/Medium/Large), number of AI opponents (1–4), **difficulty**
   (Easy/Normal/Hard — scales AI income & combat), an optional **turn limit**
   (Off/150/250 → score victory), and sound on/off. Your chosen civ sets your
