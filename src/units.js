@@ -2,6 +2,7 @@
 // movement animation. Game rules (turns, movement budget) live in game.js.
 import * as THREE from 'three';
 import { key } from './hex.js';
+import { hasModel, makeModel } from './models.js';
 
 // 0 = player (blue); 1+ = AI civs (crimson, verdant, amber, violet).
 export const OWNER_COLOR = [0x3a78d0, 0xd04545, 0x39a86b, 0xd49a2e, 0x9b59b6];
@@ -12,15 +13,15 @@ export const OWNER_COLOR = [0x3a78d0, 0xd04545, 0x39a86b, 0xd49a2e, 0x9b59b6];
 // `requires` (if set) is the tech id that must be researched to build it.
 export const UNIT_TYPES = {
   settler:    { name: 'Settler',     move: 2, sight: 2, hp: 10, cost: 30, canFound: true, build: 'body' },
-  warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier' },
-  scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout' },
+  warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'robot' },
+  scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout',   model: 'robot' },
   archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer' },
   // Tech-gated units.
   horseman:   { name: 'Horseman',    move: 4, sight: 2, hp: 18, cost: 26, attack: 7,                requires: 'animal_husbandry', build: 'horseman' },
-  swordsman:  { name: 'Swordsman',   move: 2, sight: 2, hp: 30, cost: 32, attack: 11,               requires: 'iron_working',     build: 'soldier' },
+  swordsman:  { name: 'Swordsman',   move: 2, sight: 2, hp: 30, cost: 32, attack: 11,               requires: 'iron_working',     build: 'soldier', model: 'robot' },
   catapult:   { name: 'Catapult',    move: 1, sight: 2, hp: 16, cost: 38, attack: 12, range: 2,     requires: 'the_wheel',        build: 'siege' },
   crossbow:   { name: 'Crossbowman', move: 2, sight: 2, hp: 20, cost: 34, attack: 9,  range: 2,     requires: 'machinery',        build: 'archer' },
-  musketman:  { name: 'Musketman',   move: 2, sight: 2, hp: 40, cost: 46, attack: 15,               requires: 'gunpowder',        build: 'soldier' },
+  musketman:  { name: 'Musketman',   move: 2, sight: 2, hp: 40, cost: 46, attack: 15,               requires: 'gunpowder',        build: 'soldier', model: 'robot' },
   artillery:  { name: 'Artillery',   move: 1, sight: 2, hp: 22, cost: 50, attack: 18, range: 3,     requires: 'steel',            build: 'siege' },
   tank:       { name: 'Tank',        move: 3, sight: 3, hp: 60, cost: 72, attack: 24,               requires: 'combustion',       build: 'tank' },
   airplane:   { name: 'Airplane',    move: 6, sight: 4, hp: 30, cost: 64, attack: 18, range: 3,     requires: 'flight',           build: 'plane' },
@@ -47,7 +48,9 @@ export class Unit {
     this.sight = this.def.sight;
     this.waypoints = [];           // queued world positions for animation
     this.embarked = false;         // a land unit currently at sea
-    this.mesh = this._build();
+    this.mixer = null;             // animation mixer when using a GLTF model
+    this._anim = 'idle';
+    this.mesh = hasModel(this.def.model) ? this._buildModel() : this._build();
     // Land units carry a hidden boat hull, shown when they embark.
     if (this.def.domain !== 'sea') {
       this.boat = new THREE.Mesh(BOAT_GEO, BOAT_MAT);
@@ -149,6 +152,28 @@ export class Unit {
     return g;
   }
 
+  // A rigged GLTF character with idle/walk animation, on an owner-coloured base.
+  _buildModel() {
+    const g = new THREE.Group();
+    const m = makeModel(this.def.model);
+    const root = m.scene;
+    root.scale.setScalar(m.def.scale);
+    root.traverse((o) => {
+      if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; if (o.material) o.material = o.material.clone(); }
+    });
+    g.add(root);
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.06, 14),
+      new THREE.MeshStandardMaterial({ color: OWNER_COLOR[this.owner], flatShading: true, emissive: OWNER_COLOR[this.owner], emissiveIntensity: 0.3, roughness: 0.6 }));
+    disc.position.y = 0.03; disc.castShadow = true; g.add(disc);
+
+    this.mixer = new THREE.AnimationMixer(root);
+    const find = (name) => THREE.AnimationClip.findByName(m.animations, name);
+    this.idleAction = (m.def.idle && find(m.def.idle)) ? this.mixer.clipAction(find(m.def.idle)) : null;
+    this.walkAction = (m.def.walk && find(m.def.walk)) ? this.mixer.clipAction(find(m.def.walk)) : null;
+    if (this.idleAction) this.idleAction.play();
+    return g;
+  }
+
   // Snap mesh to a tile top immediately (no animation).
   placeAt(q, r, worldView) {
     this.q = q; this.r = r;
@@ -168,6 +193,17 @@ export class Unit {
   get isMoving() { return this.waypoints.length > 0; }
 
   update(dt) {
+    if (this.mixer) {
+      this.mixer.update(dt);
+      const want = this.waypoints.length ? 'walk' : 'idle';
+      if (want !== this._anim && this.idleAction && this.walkAction) {
+        this._anim = want;
+        const to = want === 'walk' ? this.walkAction : this.idleAction;
+        const from = want === 'walk' ? this.idleAction : this.walkAction;
+        to.reset().setEffectiveWeight(1).fadeIn(0.2).play();
+        from.fadeOut(0.2);
+      }
+    }
     if (!this.waypoints.length) return;
     const target = this.waypoints[0];
     const pos = this.mesh.position;
@@ -180,7 +216,7 @@ export class Unit {
     } else {
       dir.multiplyScalar(step / dist);
       pos.add(dir);
-      this.mesh.rotation.y = Math.atan2(dir.x, dir.z);
+      this.mesh.rotation.y = Math.atan2(dir.x, dir.z) + Math.PI; // face travel direction
     }
   }
 }

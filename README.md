@@ -136,6 +136,12 @@ civilizations** spread across the map — who also war with each other.
   with its own low-poly model: Horseman, Swordsman, Catapult, Crossbowman,
   Musketman, Artillery, Tank and the Airplane, alongside the economy/defense
   buildings above. Units only appear in a city's build menu once their tech is in.
+- **Rigged character models** — soldier-type units use a **rigged GLTF model**
+  with **idle/walk animation** (a CC0 RobotExpressive, by Tomás Laulhé /
+  Don McCurdy) on an owner-coloured base, loaded via Three's GLTFLoader. It's a
+  progressive enhancement: if the model can't load, units fall back to their
+  procedural meshes. Drop your own rigged `.glb` (from Meshy / Tripo / Mixamo /
+  Quaternius…) into `vendor/models/` and register it in `src/models.js`.
 - **City defense** — a unit garrisoned on its city takes reduced damage, and
   City Walls (Masonry) make it tougher still.
 - **Ships & seafaring** — research **Sailing** to *embark* land units across the
@@ -172,6 +178,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/effects.js` | Short-lived combat visuals (lunge, hit-flash, projectile, death fade) |
 | `src/world.js` | Renders tile data into hex-prism meshes; fog, highlight & border overlays |
 | `src/units.js` | Unit & City classes — their 3D meshes and movement animation |
+| `src/models.js` | Optional rigged GLTF character loader (idle/walk), with procedural fallback |
 | `src/game.js` | Rules: turns, fog, founding, combat, the 4X economy, AI |
 | `src/camera.js` | RTS camera rig |
 | `src/ui.js` | HUD / selection panel (plain DOM) |

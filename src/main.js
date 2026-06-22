@@ -14,6 +14,11 @@ import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
 import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
+import { loadUnitModels } from './models.js';
+
+// Load rigged character models before spawning (falls back to procedural meshes
+// if unavailable or slow). Shown during the "Generating world…" splash.
+await Promise.race([loadUnitModels(), new Promise((r) => setTimeout(r, 6000))]);
 
 const MAP_RADIUS = 26;
 const NUM_AI = 2;       // rival AI civilizations (plus the human player)
