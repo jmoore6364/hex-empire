@@ -33,6 +33,8 @@ export class UI {
       `<div class="row"><span>Movement</span><span>${unit.move}/${unit.def.move}</span></div>` +
       (unit.def.attack ? `<div class="row"><span>Attack</span><span>${unit.def.attack}</span></div>` : '') +
       (unit.def.range > 1 ? `<div class="row"><span>Range</span><span>${unit.def.range} (ranged)</span></div>` : '') +
+      (unit.def.domain === 'sea' ? `<div class="row"><span>Type</span><span>⚓ Naval</span></div>` : '') +
+      (unit.embarked ? `<div class="row"><span>Status</span><span>⚓ Embarked (vulnerable)</span></div>` : '') +
       `<div class="row"><span>Tile</span><span>${unit.q}, ${unit.r}</span></div>`;
     this._renderActions(actions);
   }

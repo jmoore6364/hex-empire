@@ -10,6 +10,7 @@ import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { computeOwnership, ownedTiles } from './territory.js';
 import { cityYields } from './economy.js';
 import { resolveAttack } from './combat.js';
+import { isWater } from './worldgen.js';
 
 const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhollow', 'Saltspire', 'Ironford', 'Dawnvale'];
 
@@ -106,12 +107,28 @@ export class Game {
   }
 
   // --- player actions -------------------------------------------------------
+  // Domain-aware movement: naval units travel on water; land units travel on
+  // land and, with Sailing researched, may embark onto water.
+  _moveOpts(unit) {
+    if (unit.def.domain === 'sea') return { enter: (t) => isWater(t), cost: () => 1 };
+    const canSail = this.civs[unit.owner].research.researched.has('sailing');
+    return {
+      enter: (t) => t.passable || (canSail && isWater(t)),
+      cost: (t) => (t.passable ? t.moveCost : 1),
+    };
+  }
+
+  // A city that can build/launch ships: it touches water.
+  isCoastal(city) {
+    return neighbors(city.q, city.r).some(n => isWater(this.tiles.get(key(n.q, n.r))));
+  }
+
   reachableFor(unit) {
-    return reachable(this.tiles, unit, unit.move, this.occupied(unit));
+    return reachable(this.tiles, unit, unit.move, this.occupied(unit), this._moveOpts(unit));
   }
 
   pathFor(unit, q, r) {
-    return findPath(this.tiles, unit, { q, r }, this.occupied(unit));
+    return findPath(this.tiles, unit, { q, r }, this.occupied(unit), this._moveOpts(unit));
   }
 
   // Move (or attack). Returns { ok, taken?, msg? }.
@@ -121,6 +138,7 @@ export class Game {
     const enemy = this.unitAt(q, r);
     if (enemy && enemy.owner !== unit.owner) {
       if (!unit.def.attack) return { ok: false, msg: 'This unit cannot attack' };
+      if (unit.embarked) return { ok: false, msg: 'Cannot attack while embarked' };
       const d = distance(unit, { q, r });
       const range = unit.def.range || 1;
       if (d >= 1 && d <= range) return this.resolveCombat(unit, enemy, range > 1);
@@ -129,7 +147,8 @@ export class Game {
     if (enemy && enemy.owner === unit.owner) return { ok: false, msg: 'Tile occupied' };
     if (this.cityAt(q, r) && this.cityAt(q, r).owner !== unit.owner) return { ok: false, msg: 'Enemy city' };
 
-    const path = this.pathFor(unit, q, r);
+    const opts = this._moveOpts(unit);
+    const path = findPath(this.tiles, unit, { q, r }, this.occupied(unit), opts);
     if (!path || !path.length) return { ok: false, msg: 'No path' };
 
     // Spend movement along the path; a unit may always take at least one step.
@@ -138,16 +157,19 @@ export class Game {
     for (const step of path) {
       if (remaining <= 0) break;
       taken.push(step);
-      remaining -= this.tiles.get(key(step.q, step.r)).moveCost;
+      remaining -= opts.cost(this.tiles.get(key(step.q, step.r)));
     }
     unit.move = Math.max(0, remaining);
     unit.enqueuePath(taken, this.view);
+    if (unit.def.domain !== 'sea') unit.setEmbarked(isWater(this.tiles.get(key(unit.q, unit.r))));
     this.recomputeFog();
     return { ok: true, taken };
   }
 
   foundCity(unit) {
     if (!unit.def.canFound) return { ok: false, msg: 'This unit cannot found a city' };
+    const here = this.tiles.get(key(unit.q, unit.r));
+    if (!here || !here.passable) return { ok: false, msg: 'Must be on land to found a city' };
     if (this.cityAt(unit.q, unit.r)) return { ok: false, msg: 'Already a city here' };
     const name = unit.owner === 0
       ? CITY_NAMES[this.cityNameIdx++ % CITY_NAMES.length]
@@ -170,6 +192,7 @@ export class Game {
     const city = this.cityAt(defender.q, defender.r);
     let extraDef = 1;
     if (city && city.owner === defender.owner) extraDef = city.buildings.has('walls') ? 1.75 : 1.25;
+    if (defender.embarked) extraDef *= 0.5; // a unit caught at sea is very vulnerable
     const res = resolveAttack(attacker.def.attack || 0, defender.def.attack || 0, dt ? dt.terrain : null, isRanged, extraDef);
 
     // Cosmetic combat animation (skipped in headless/logic contexts).
@@ -196,7 +219,7 @@ export class Game {
 
   // Visible enemy units this unit could attack right now (melee or ranged).
   attackTargetsFor(unit) {
-    if (!unit.def.attack || unit.move <= 0) return [];
+    if (!unit.def.attack || unit.move <= 0 || unit.embarked) return [];
     const range = unit.def.range || 1;
     const out = [];
     for (const e of this.units) {
@@ -241,7 +264,7 @@ export class Game {
     const items = [];
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
       if (def.requires && !researched.has(def.requires)) continue; // gated by tech
-      items.push({ kind: 'unit', id, name: def.name, cost: def.cost });
+      items.push({ kind: 'unit', id, name: def.name, cost: def.cost, domain: def.domain });
     }
     for (const id of unlockedBuildings(researched)) {
       items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc });
@@ -260,8 +283,17 @@ export class Game {
     return Math.max(1, Math.ceil(remaining / prod));
   }
 
-  // Where a freshly built unit appears: the city tile if free, else a neighbor.
-  _spawnSpot(city) {
+  // Where a freshly built unit appears. Ships launch onto adjacent water; land
+  // units take the city tile if free, else a free neighbouring land tile.
+  _spawnSpot(city, def) {
+    const sea = def && def.domain === 'sea';
+    if (sea) {
+      for (const n of neighbors(city.q, city.r)) {
+        const t = this.tiles.get(key(n.q, n.r));
+        if (t && isWater(t) && !this.unitAt(n.q, n.r)) return n;
+      }
+      return null;
+    }
     if (!this.unitAt(city.q, city.r)) return { q: city.q, r: city.r };
     for (const n of neighbors(city.q, city.r)) {
       const t = this.tiles.get(key(n.q, n.r));
@@ -275,7 +307,7 @@ export class Game {
       city.buildings.add(item.id);
       if (city.owner === 0) this.events.push(`${BUILDINGS[item.id].name} built in ${city.name}`);
     } else {
-      const spot = this._spawnSpot(city);
+      const spot = this._spawnSpot(city, UNIT_TYPES[item.id]);
       this.spawnUnit(item.id, city.owner, spot.q, spot.r);
       if (city.owner === 0) this.events.push(`${UNIT_TYPES[item.id].name} trained in ${city.name}`);
     }
@@ -287,7 +319,7 @@ export class Game {
     while (city.queue.length) {
       const item = city.queue[0];
       if (city.production < item.cost) break;
-      if (item.kind === 'unit' && !this._spawnSpot(city)) break; // no room — wait a turn
+      if (item.kind === 'unit' && !this._spawnSpot(city, UNIT_TYPES[item.id])) break; // no room — wait
       city.production -= item.cost;
       city.queue.shift();
       this._completeBuild(city, item);
@@ -400,7 +432,8 @@ export class Game {
         targets.sort((a, b) => distance(u, a) - distance(u, b));
         dest = targets[0];
       }
-      const reach = reachable(this.tiles, u, u.move, this.occupied(u));
+      const opts = this._moveOpts(u);
+      const reach = reachable(this.tiles, u, u.move, this.occupied(u), opts);
       const options = [...reach.keys()];
       if (!options.length) continue;
       let pick = options[0];
@@ -415,7 +448,7 @@ export class Game {
         pick = options[(this.turn * 7 + u.id) % options.length]; // deterministic wander
       }
       const [q, r] = pick.split(',').map(Number);
-      const path = findPath(this.tiles, u, { q, r }, this.occupied(u));
+      const path = findPath(this.tiles, u, { q, r }, this.occupied(u), opts);
       if (path) u.enqueuePath(path, this.view);
     }
   }
@@ -430,7 +463,7 @@ export class Game {
     const researched = this.civs[1].research.researched;
     let best = 'warrior', bestAtk = 0;
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
-      if (!def.attack || def.canFound) continue;
+      if (!def.attack || def.canFound || def.domain === 'sea') continue; // AI builds land units
       if (def.requires && !researched.has(def.requires)) continue;
       if (def.attack > bestAtk) { bestAtk = def.attack; best = id; }
     }

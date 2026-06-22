@@ -23,7 +23,14 @@ export const UNIT_TYPES = {
   artillery:  { name: 'Artillery',   move: 1, sight: 2, hp: 22, cost: 50, attack: 18, range: 3,     requires: 'steel',            build: 'siege' },
   tank:       { name: 'Tank',        move: 3, sight: 3, hp: 60, cost: 72, attack: 24,               requires: 'combustion',       build: 'tank' },
   airplane:   { name: 'Airplane',    move: 6, sight: 4, hp: 30, cost: 64, attack: 18, range: 3,     requires: 'flight',           build: 'plane' },
+  // Naval units (domain 'sea') — built only in coastal cities, move on water.
+  galley:     { name: 'Galley',      move: 4, sight: 3, hp: 24, cost: 30, attack: 8,                requires: 'sailing',  domain: 'sea', build: 'ship' },
+  frigate:    { name: 'Frigate',     move: 5, sight: 3, hp: 34, cost: 50, attack: 16, range: 2,     requires: 'gunpowder', domain: 'sea', build: 'ship' },
 };
+
+// Shared boat hull shown under a land unit while it's embarked at sea.
+const BOAT_GEO = new THREE.BoxGeometry(0.6, 0.16, 0.32);
+const BOAT_MAT = new THREE.MeshStandardMaterial({ color: 0x6b4f2a, flatShading: true, roughness: 0.8 });
 
 let nextId = 1;
 
@@ -38,7 +45,22 @@ export class Unit {
     this.hp = this.def.hp;
     this.sight = this.def.sight;
     this.waypoints = [];           // queued world positions for animation
+    this.embarked = false;         // a land unit currently at sea
     this.mesh = this._build();
+    // Land units carry a hidden boat hull, shown when they embark.
+    if (this.def.domain !== 'sea') {
+      this.boat = new THREE.Mesh(BOAT_GEO, BOAT_MAT);
+      this.boat.position.y = 0.12;
+      this.boat.visible = false;
+      this.boat.castShadow = true;
+      this.mesh.add(this.boat);
+    }
+  }
+
+  // Toggle the embarked (at-sea) state and its boat hull.
+  setEmbarked(on) {
+    this.embarked = on;
+    if (this.boat) this.boat.visible = on;
   }
 
   _build() {
@@ -107,6 +129,15 @@ export class Unit {
       tail.position.set(-0.32, 0.84, 0); g.add(tail);
       const nose = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.18, 8), mat);
       nose.rotation.z = -Math.PI / 2; nose.position.set(0.42, 0.75, 0); g.add(nose);
+    } else if (this.def.build === 'ship') {
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.2, 0.34), new THREE.MeshStandardMaterial({ color: 0x6b4f2a, flatShading: true, roughness: 0.8 }));
+      hull.position.y = 0.2; g.add(hull);
+      const prow = new THREE.Mesh(new THREE.ConeGeometry(0.17, 0.3, 4), hull.material);
+      prow.rotation.z = -Math.PI / 2; prow.position.set(0.46, 0.2, 0); g.add(prow);
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.7, 5), trim);
+      mast.position.set(0, 0.6, 0); g.add(mast);
+      const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.4), new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, flatShading: true }));
+      sail.position.set(0, 0.62, 0); g.add(sail);
     } else { // settler — a little wagon
       const cart = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.34), mat);
       cart.position.y = 0.4; g.add(cart);

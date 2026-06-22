@@ -12,14 +12,19 @@ function lowestF(openSet, f) {
   return bestK;
 }
 
-// A* from start to goal over passable tiles. Returns an array of {q,r} from the
-// first step after `start` through `goal`, or null if unreachable.
+// A* from start to goal. Returns an array of {q,r} from the first step after
+// `start` through `goal`, or null if unreachable.
 // `blocked` is an optional Set of "q,r" keys treated as impassable (e.g. enemy units).
-export function findPath(tiles, start, goal, blocked = new Set()) {
+// `opts.enter(tile)` decides if a tile is enterable (default: tile.passable);
+// `opts.cost(tile)` is the move cost to enter it (default: tile.moveCost). These
+// let movement depend on the unit's domain (land / sea / embarked).
+export function findPath(tiles, start, goal, blocked = new Set(), opts = {}) {
+  const canEnter = opts.enter || ((t) => t.passable);
+  const costOf = opts.cost || ((t) => t.moveCost);
   const startK = key(start.q, start.r);
   const goalK = key(goal.q, goal.r);
   const goalTile = tiles.get(goalK);
-  if (!goalTile || !goalTile.passable || blocked.has(goalK)) return null;
+  if (!goalTile || !canEnter(goalTile) || blocked.has(goalK)) return null;
 
   const g = new Map([[startK, 0]]);
   const f = new Map([[startK, distance(start, goal)]]);
@@ -39,8 +44,8 @@ export function findPath(tiles, start, goal, blocked = new Set()) {
     for (const n of neighbors(cur.q, cur.r)) {
       const nk = key(n.q, n.r);
       const tile = tiles.get(nk);
-      if (!tile || !tile.passable || blocked.has(nk)) continue;
-      const tentative = g.get(curK) + tile.moveCost;
+      if (!tile || !canEnter(tile) || blocked.has(nk)) continue;
+      const tentative = g.get(curK) + costOf(tile);
       if (tentative < (g.get(nk) ?? Infinity)) {
         came.set(nk, curK);
         g.set(nk, tentative);
@@ -54,7 +59,10 @@ export function findPath(tiles, start, goal, blocked = new Set()) {
 
 // Dijkstra-style flood fill: every tile reachable from `start` for at most
 // `maxCost` movement. Returns a Map<"q,r", costToReach> excluding the start.
-export function reachable(tiles, start, maxCost, blocked = new Set()) {
+// `opts` carries the same enter()/cost() predicates as findPath.
+export function reachable(tiles, start, maxCost, blocked = new Set(), opts = {}) {
+  const canEnter = opts.enter || ((t) => t.passable);
+  const costOf = opts.cost || ((t) => t.moveCost);
   const startK = key(start.q, start.r);
   const cost = new Map([[startK, 0]]);
   const frontier = new Set([startK]);
@@ -68,11 +76,11 @@ export function reachable(tiles, start, maxCost, blocked = new Set()) {
     for (const n of neighbors(cur.q, cur.r)) {
       const nk = key(n.q, n.r);
       const tile = tiles.get(nk);
-      if (!tile || !tile.passable || blocked.has(nk)) continue;
+      if (!tile || !canEnter(tile) || blocked.has(nk)) continue;
       // A unit may always take one step if it has any movement left, so the
       // step is affordable when the budget isn't already spent.
       if (cost.get(curK) >= maxCost) continue;
-      const stepCost = cost.get(curK) + tile.moveCost;
+      const stepCost = cost.get(curK) + costOf(tile);
       if (stepCost < (cost.get(nk) ?? Infinity)) {
         cost.set(nk, stepCost);
         result.set(nk, stepCost);

@@ -62,7 +62,8 @@ far side of the continent.
   continent ringed by ocean, scattered islands, and enclosed inland lakes, across
   every terrain type (plains, grassland, forest, desert, tundra, snow, hills,
   mountains). Rendered as a single InstancedMesh so even ~2000 tiles stay cheap.
-  Deterministic per random seed each load; both civs start on the main landmass.
+  Deterministic per random seed each load; both civs start on the main landmass,
+  and the outer islands are reachable once you research Sailing.
 - **RTS camera** — pan / zoom / rotate / orbit.
 - **Fog of war** — unexplored hexes are dark, explored-but-unseen are dimmed,
   enemies hidden until spotted.
@@ -107,6 +108,10 @@ far side of the continent.
   buildings above. Units only appear in a city's build menu once their tech is in.
 - **City defense** — a unit garrisoned on its city takes reduced damage, and
   City Walls (Masonry) make it tougher still.
+- **Ships & seafaring** — research **Sailing** to *embark* land units across the
+  water (they ride a little boat and are vulnerable at sea) and to build naval
+  units in coastal cities: the **Galley**, and later the **Frigate**. Sail a
+  Settler over to colonize the outer islands, or send a fleet to raid the coast.
 - **Terrain defense** — defenders on hills, forest and mountains take less
   damage, so where you fight matters.
 

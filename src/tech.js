@@ -13,6 +13,7 @@ export const TECHS = {
   pottery:           { name: 'Pottery',          era: 0, cost: 20,  requires: [],                              unlocks: 'Granary' },
   animal_husbandry:  { name: 'Animal Husbandry', era: 0, cost: 20,  requires: [],                              unlocks: 'Horseman' },
   masonry:           { name: 'Masonry',          era: 0, cost: 25,  requires: [],                              unlocks: 'City Walls' },
+  sailing:           { name: 'Sailing',          era: 0, cost: 25,  requires: ['pottery'],                     unlocks: 'Galley & embarking' },
   writing:           { name: 'Writing',          era: 0, cost: 30,  requires: ['pottery'],                     unlocks: 'Library' },
   bronze:            { name: 'Bronze Working',    era: 0, cost: 30,  requires: ['pottery'],                     unlocks: 'Workshop' },
 
@@ -26,7 +27,7 @@ export const TECHS = {
   engineering:       { name: 'Engineering',      era: 2, cost: 110, requires: ['mathematics', 'the_wheel'],    unlocks: 'Aqueduct' },
   banking:           { name: 'Banking',          era: 2, cost: 120, requires: ['currency', 'mathematics'],     unlocks: 'Bank' },
   machinery:         { name: 'Machinery',        era: 2, cost: 120, requires: ['iron_working', 'engineering'], unlocks: 'Crossbowman' },
-  gunpowder:         { name: 'Gunpowder',        era: 2, cost: 150, requires: ['machinery', 'iron_working'],   unlocks: 'Musketman' },
+  gunpowder:         { name: 'Gunpowder',        era: 2, cost: 150, requires: ['machinery', 'iron_working'],   unlocks: 'Musketman & Frigate' },
 
   // Era IV — Industrial
   industrialization: { name: 'Industrialization', era: 3, cost: 210, requires: ['banking', 'machinery'],       unlocks: 'Factory' },

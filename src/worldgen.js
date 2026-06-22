@@ -21,6 +21,9 @@ export const TERRAIN = {
   MOUNTAIN:  { name: 'Mountain',  color: 0x7d7d7d, elevation: 0.70, passable: false, moveCost: 99, yields: { food: 0, prod: 1, gold: 0 } },
 };
 
+// Water tiles (ocean, coast, lakes) — used by naval movement and embarking.
+export const isWater = (t) => !!t && (t.terrain === 'OCEAN' || t.terrain === 'COAST' || t.terrain === 'LAKE');
+
 // --- Deterministic seeded noise ----------------------------------------------
 
 function mulberry32(seed) {

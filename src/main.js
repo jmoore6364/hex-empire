@@ -202,9 +202,11 @@ function refreshCityPanel() {
   };
 
   const actions = [];
+  const coastal = game.isCoastal(c);
   const queuedBuildings = new Set(c.queue.filter(i => i.kind === 'building').map(i => i.id));
   for (const item of game.buildOptions(0)) {
     if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
+    if (item.domain === 'sea' && !coastal) continue; // ships need a coastal city
     const turns = game.turnsFor(c, item.cost, false);
     actions.push({ label: `⚒ ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
   }

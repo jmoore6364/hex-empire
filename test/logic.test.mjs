@@ -1,7 +1,7 @@
 // Self-test for the pure-logic modules (no browser / Three needed).
 // Run with:  npm test
 import { neighbors, distance, hexToWorld, worldToHex, hexMap, key, hexesInRange } from '../src/hex.js';
-import { generateWorld, findStartTile, connectedLand, TERRAIN } from '../src/worldgen.js';
+import { generateWorld, findStartTile, connectedLand, isWater, TERRAIN } from '../src/worldgen.js';
 import { findPath, reachable } from '../src/pathfinding.js';
 import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
@@ -58,6 +58,8 @@ check('findStartTile returns a passable tile', start && start.passable);
 
 // --- archipelago: lakes & landmasses ---
 check('LAKE terrain is impassable water', TERRAIN.LAKE && TERRAIN.LAKE.passable === false);
+check('isWater recognises ocean/coast/lake', isWater({ terrain: 'OCEAN' }) && isWater({ terrain: 'COAST' }) && isWater({ terrain: 'LAKE' }));
+check('isWater rejects land', !isWater({ terrain: 'GRASSLAND' }) && !isWater(null));
 {
   const wl = generateWorld(16, 1337);
   const lakes = [...wl.tiles.values()].filter(t => t.terrain === 'LAKE');
@@ -84,6 +86,13 @@ check('path length is the hex distance', p && p.length === distance({ q: -3, r: 
 // Wall off the goal -> unreachable.
 grid.get(key(3, 0)).passable = false;
 check('findPath returns null for impassable goal', findPath(grid, { q: -3, r: 0 }, { q: 3, r: 0 }) === null);
+// ...but a custom enter() predicate (e.g. a ship/embark) can path onto it.
+check('findPath honours a custom enter() predicate',
+  Array.isArray(findPath(grid, { q: -3, r: 0 }, { q: 3, r: 0 }, new Set(), { enter: () => true, cost: () => 1 })));
+grid.get(key(3, 0)).passable = true;
+// reachable with a blocking enter() yields nothing; permissive enter() reaches.
+check('reachable respects a restrictive enter()',
+  reachable(grid, { q: 0, r: 0 }, 2, new Set(), { enter: () => false }).size === 0);
 
 const reach = reachable(grid, { q: 0, r: 0 }, 2);
 check('reachable excludes the start', !reach.has(key(0, 0)));
