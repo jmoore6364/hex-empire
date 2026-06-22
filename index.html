@@ -101,6 +101,23 @@
     #go-new { background: linear-gradient(180deg, #3a7d44, #2c5e34); color: #fff; border: 1px solid #4d9e5a;
       border-radius: 8px; padding: 12px 24px; font-size: 15px; font-weight: 600; cursor: pointer; }
 
+    #era-banner { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      z-index: 25; pointer-events: none; }
+    #era-banner.show { display: flex; animation: eraFade 4s ease forwards; }
+    #era-banner .era-card { text-align: center; padding: 26px 60px;
+      background: linear-gradient(180deg, rgba(20,30,46,0.92), rgba(12,18,28,0.92));
+      border-top: 2px solid #d9b85c; border-bottom: 2px solid #d9b85c;
+      box-shadow: 0 10px 60px rgba(0,0,0,0.6); }
+    #era-banner .era-sub { letter-spacing: 5px; font-size: 13px; color: #d9b85c; margin-bottom: 8px; }
+    #era-banner h2 { font-size: 40px; margin: 0; letter-spacing: 2px;
+      background: linear-gradient(180deg, #fff, #d9b85c); -webkit-background-clip: text; background-clip: text; color: transparent; }
+    @keyframes eraFade {
+      0% { opacity: 0; transform: scale(0.92); }
+      12% { opacity: 1; transform: scale(1); }
+      80% { opacity: 1; transform: scale(1); }
+      100% { opacity: 0; transform: scale(1.02); }
+    }
+
     #menu { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
       background: radial-gradient(circle at 50% 28%, #16263a, #080b11 72%); z-index: 30; pointer-events: auto; overflow: auto; }
     #menu .menu-card { text-align: center; padding: 26px 20px; max-width: 720px; width: 92vw; }
@@ -166,6 +183,8 @@
 
   <div id="topbar" class="panel">
     <div class="stat"><span class="label">Turn</span><b id="turn">1</b></div>
+    <div class="stat"><span class="label">Year</span><b id="year">4000 BC</b></div>
+    <div class="stat"><span class="label">Age</span><b id="age">Ancient</b></div>
     <div class="stat"><span class="label">Civ</span><span id="civemblem"></span><b id="civname">Your Empire</b></div>
     <div class="stat food"><span class="label">Food</span><b id="food">0</b></div>
     <div class="stat prod"><span class="label">Prod</span><b id="prod">0</b></div>
@@ -226,6 +245,8 @@
 
   <button id="endturn">End Turn ▶</button>
   <div id="toast"></div>
+
+  <div id="era-banner"><div class="era-card"><div class="era-sub">A NEW AGE DAWNS</div><h2 id="era-title">—</h2></div></div>
 
   <div id="gameover">
     <div class="go-card">

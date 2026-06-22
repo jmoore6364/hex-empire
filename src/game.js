@@ -5,7 +5,7 @@
 import { key, distance, hexesInRange, neighbors } from './hex.js';
 import { findPath, reachable } from './pathfinding.js';
 import { Unit, City, UNIT_TYPES, OWNER_COLOR } from './units.js';
-import { TECHS, availableTechs, pathTo } from './tech.js';
+import { TECHS, ERAS, availableTechs, pathTo } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { DISTRICTS, DISTRICT_COST, buildingDistrict, unlockedDistricts } from './districts.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from './territory.js';
@@ -17,6 +17,9 @@ import { CIVICS, GOVERNMENTS, POLICIES, availableCivics, availableGovernments, a
 const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhollow', 'Saltspire', 'Ironford', 'Dawnvale'];
 // Civ display names by owner index (0 = the human player).
 const CIV_NAMES = ['Your Empire', 'Crimson', 'Verdant', 'Amber', 'Violet'];
+
+// Years added per turn, by current age (time speeds up as history advances).
+const AGE_YEAR_STEP = [40, 25, 15, 8, 3];
 
 // AI strength by difficulty: `mul` scales AI civ income/production, `combat`
 // adds to AI attack strength.
@@ -35,6 +38,9 @@ export class Game {
     this.units = [];
     this.cities = [];
     this.turn = 1;
+    this.year = -4000;     // 4000 BC; advances each turn, faster in later ages
+    this.age = 0;          // index into ERAS, from the player's most advanced tech
+    this.ageAdvanced = null; // set to the new age name on the turn it changes
     this.cityNameIdx = 0;
     this.explored = new Set();
     this.visible = new Set();
@@ -687,6 +693,8 @@ export class Game {
         policies: [...v.policies],
       })),
       wars: [...this.wars],
+      year: this.year,
+      age: this.age,
       difficulty: this.difficulty,
       turnLimit: this.turnLimit,
       gameOver: this.gameOver,
@@ -700,6 +708,8 @@ export class Game {
     for (const c of this.cities) this.scene.remove(c.mesh);
     this.units = []; this.cities = [];
     this.turn = data.turn;
+    this.year = data.year ?? -4000;
+    this.age = data.age || 0;
     this.cityNameIdx = data.cityNameIdx || 0;
     this.explored = new Set(data.explored || []);
 
@@ -783,8 +793,12 @@ export class Game {
   }
 
   // --- turns ----------------------------------------------------------------
+  ageName() { return ERAS[this.age] || ERAS[ERAS.length - 1]; }
+  yearLabel() { return this.year < 0 ? `${-this.year} BC` : `AD ${this.year}`; }
+
   endTurn() {
     this.events = [];
+    this.ageAdvanced = null;
     this._runAI();
 
     for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
@@ -792,6 +806,12 @@ export class Game {
     this.income = this.computeIncome(0);
 
     this.turn++;
+    // Advance the calendar, and the age when the player reaches a new era.
+    this.year += AGE_YEAR_STEP[this.age] || AGE_YEAR_STEP[AGE_YEAR_STEP.length - 1];
+    let newAge = 0;
+    for (const id of this.civs[0].research.researched) newAge = Math.max(newAge, TECHS[id]?.era ?? 0);
+    if (newAge > this.age) { this.age = newAge; this.ageAdvanced = this.ageName(); this.events.push(`A new age dawns: the ${this.ageName()} Era`); }
+
     for (const u of this.units) if (u.owner === 0) {
       if (u.move === u.def.move) this._heal(u); // didn't act this turn — recover
       u.move = u.def.move;

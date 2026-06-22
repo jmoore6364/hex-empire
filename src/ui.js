@@ -19,6 +19,8 @@ export class UI {
 
   refreshTopbar(game) {
     $('turn').textContent = game.turn;
+    if (game.yearLabel) $('year').textContent = game.yearLabel();
+    if (game.ageName) $('age').textContent = game.ageName();
     if (game.civs && game.civs[0]) $('civname').textContent = game.civs[0].name;
     $('food').textContent = '+' + game.income.food;
     $('prod').textContent = '+' + game.income.prod;

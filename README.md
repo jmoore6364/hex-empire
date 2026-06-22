@@ -82,6 +82,14 @@ civilizations** spread across the map — who also war with each other.
   autosave. Traits fold straight into the modifier system, so they apply to
   yields, combat and unit costs everywhere.
 
+**Ages & timeline**
+
+- **Year & age** — the HUD tracks a **calendar year** (from 4000 BC, advancing
+  each turn — faster as history accelerates) and the empire's **age** (Ancient →
+  Classical → Medieval → Industrial → Modern), derived from your most advanced
+  tech. Reaching a new era's first tech triggers a **big "A New Age Dawns"
+  banner** with a fanfare. Year & age are saved with the game.
+
 **Pass 1 — the playable core**
 
 - **3D hex map** — a large procedurally generated **archipelago**: a main
