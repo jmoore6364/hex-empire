@@ -4,11 +4,41 @@ import * as THREE from 'three';
 import { HEX_SIZE, hexToWorld, key } from './hex.js';
 import { TERRAIN } from './worldgen.js';
 import { RESOURCES } from './resources.js';
+import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js';
 
 const UNEXPLORED = new THREE.Color(0x0c1018);
+const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0); // collapses a hidden decoration
+const WATER = new Set(['OCEAN', 'COAST', 'LAKE']);
+const DECO_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
 
 // Stable per-tile pseudo-random in [0,1), so each hex gets its own subtle shade.
 function hash2(q, r) { const s = Math.sin(q * 127.1 + r * 311.7) * 43758.5453; return s - Math.floor(s); }
+
+// Tag every vertex of a geometry with a flat colour (so merged low-poly props
+// keep multiple colours under one vertex-coloured material).
+function paint(geo, hex) {
+  const c = new THREE.Color(hex);
+  const n = geo.attributes.position.count;
+  const arr = new Float32Array(n * 3);
+  for (let i = 0; i < n; i++) { arr[i * 3] = c.r; arr[i * 3 + 1] = c.g; arr[i * 3 + 2] = c.b; }
+  geo.setAttribute('color', new THREE.BufferAttribute(arr, 3));
+  return geo;
+}
+
+let TREE_GEO, MOUNTAIN_GEO;
+function treeGeo() {
+  if (TREE_GEO) return TREE_GEO;
+  const trunk = paint(new THREE.CylinderGeometry(0.04, 0.06, 0.22, 5).translate(0, 0.11, 0), 0x6b4a2a);
+  const l1 = paint(new THREE.ConeGeometry(0.17, 0.32, 6).translate(0, 0.34, 0), 0x2f7d3a);
+  const l2 = paint(new THREE.ConeGeometry(0.12, 0.26, 6).translate(0, 0.52, 0), 0x3c9148);
+  return (TREE_GEO = mergeGeometries([trunk, l1, l2]));
+}
+function mountainGeo() {
+  if (MOUNTAIN_GEO) return MOUNTAIN_GEO;
+  const base = paint(new THREE.ConeGeometry(0.74, 1.1, 6).translate(0, 0.55, 0), 0x6d6f74);
+  const cap = paint(new THREE.ConeGeometry(0.3, 0.42, 6).translate(0, 1.12, 0), 0xeef3f9);
+  return (MOUNTAIN_GEO = mergeGeometries([base, cap]));
+}
 
 function tileHeight(tile) {
   if (!tile.passable && tile.terrain !== 'MOUNTAIN') return 0.45; // water sits low & flat
@@ -90,15 +120,88 @@ export class WorldView {
       scene.add(riverGroup);
     }
 
+    this.visibleNow = null;
+    this._buildDecorations(world);
     this._initHighlights();
   }
 
   topOf(q, r) { return this.tops.get(key(q, r)); }
   tileForInstance(id) { return this.instanceTiles[id]; }
 
+  // Instanced low-poly props: trees on forests, peaks on mountains. Each prop
+  // remembers its tile so fog can collapse it (scale 0) until explored.
+  _buildDecorations(world) {
+    this.decorations = [];
+    const d = new THREE.Object3D();
+    const make = (geo, placements) => {
+      if (!placements.length) return;
+      const mesh = new THREE.InstancedMesh(geo, DECO_MAT, placements.length);
+      mesh.castShadow = true;
+      const tiles = [], bases = [];
+      placements.forEach((p, i) => { mesh.setMatrixAt(i, p.m); tiles.push(p.k); bases.push(p.m.clone()); });
+      mesh.instanceMatrix.needsUpdate = true;
+      mesh.frustumCulled = false;
+      this.group.add(mesh);
+      this.decorations.push({ mesh, tiles, bases });
+    };
+
+    // How many trees a tile gets (forests are dense; grassland/plains/hills get
+    // a scattered few).
+    const treeCount = (tile) => {
+      const h = hash2(tile.q, tile.r);
+      if (tile.terrain === 'FOREST') return 3 + Math.floor(h * 2.5);
+      if (tile.terrain === 'HILLS') return 1 + Math.floor(h * 2);
+      if (tile.terrain === 'GRASSLAND') return h < 0.4 ? 1 : 0;
+      if (tile.terrain === 'PLAINS') return h < 0.22 ? 1 : 0;
+      return 0;
+    };
+
+    const trees = [], peaks = [];
+    for (const tile of world.tiles.values()) {
+      const top = this.tops.get(key(tile.q, tile.r));
+      if (!top) continue;
+      const n = treeCount(tile);
+      for (let t = 0; t < n; t++) {
+        const hx = hash2(tile.q * 3 + t, tile.r * 7), hz = hash2(tile.r * 5 + t + 1, tile.q * 11);
+        d.position.set(top.x + (hx - 0.5) * 1.0, top.y, top.z + (hz - 0.5) * 1.0);
+        d.scale.setScalar(0.62 + hash2(tile.q + t, tile.r - t) * 0.55);
+        d.rotation.set(0, hx * 6.283, 0);
+        d.updateMatrix();
+        trees.push({ k: key(tile.q, tile.r), m: d.matrix.clone() });
+      }
+      if (tile.terrain === 'MOUNTAIN') {
+        const s = 0.85 + hash2(tile.q, tile.r) * 0.5;
+        d.position.set(top.x, top.y, top.z);
+        d.scale.set(s, s * (0.9 + tile.elevation * 0.6), s);
+        d.rotation.set(0, hash2(tile.r, tile.q) * 6.283, 0);
+        d.updateMatrix();
+        peaks.push({ k: key(tile.q, tile.r), m: d.matrix.clone() });
+      }
+    }
+    make(treeGeo(), trees);
+    make(mountainGeo(), peaks);
+  }
+
+  // Gentle shimmer on the water tiles currently in view (cheap — only the small
+  // visible set). Called each frame from the render loop.
+  animateWater(time) {
+    if (!this.visibleNow) return;
+    const c = new THREE.Color();
+    let touched = false;
+    for (const k of this.visibleNow) {
+      const i = this.tileIndex.get(k);
+      if (i === undefined || !WATER.has(this.instanceTiles[i].terrain)) continue;
+      const f = 0.9 + 0.13 * Math.sin(time * 1.5 + (i % 17));
+      this.tileMesh.setColorAt(i, c.copy(this.baseColors[i]).multiplyScalar(f));
+      touched = true;
+    }
+    if (touched && this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
+  }
+
   // --- Fog of war -----------------------------------------------------------
   // visible: Set of "q,r" in current sight; explored: Set ever-seen.
   applyFog(visible, explored) {
+    this.visibleNow = visible;
     const c = new THREE.Color();
     for (const [k, i] of this.tileIndex) {
       const base = this.baseColors[i];
@@ -110,6 +213,12 @@ export class WorldView {
       if (mk) mk.visible = explored.has(k);
     }
     if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
+
+    // Hide trees/peaks on tiles we've never seen.
+    for (const deco of (this.decorations || [])) {
+      for (let i = 0; i < deco.tiles.length; i++) deco.mesh.setMatrixAt(i, explored.has(deco.tiles[i]) ? deco.bases[i] : ZERO_MATRIX);
+      deco.mesh.instanceMatrix.needsUpdate = true;
+    }
   }
 
   // --- Highlight overlays ---------------------------------------------------

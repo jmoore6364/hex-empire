@@ -81,8 +81,8 @@ function pickTerrain(elevation, moisture, latitude) {
   if (elevation < 0.42) return 'OCEAN';
   if (elevation < 0.47) return 'COAST';
   if (elevation < 0.50) return 'BEACH';
-  if (elevation > 0.84) return 'MOUNTAIN';
-  if (elevation > 0.70) return 'HILLS';
+  if (elevation > 0.76) return 'MOUNTAIN';
+  if (elevation > 0.62) return 'HILLS';
 
   // Cold poles.
   if (latitude > 0.78) return 'SNOW';
@@ -91,7 +91,7 @@ function pickTerrain(elevation, moisture, latitude) {
   // Temperate band, varied by moisture.
   if (moisture < 0.30) return 'DESERT';
   if (moisture < 0.45) return 'PLAINS';
-  if (moisture > 0.68) return 'FOREST';
+  if (moisture > 0.60) return 'FOREST';
   return 'GRASSLAND';
 }
 
@@ -117,6 +117,10 @@ export function generateWorld(radius = 12, seed = 1337) {
     const dist = Math.hypot(nx, ny) / radius;           // 0 center .. ~1 edge
     elevation += (0.30 - dist) * 0.26;
     elevation -= Math.pow(Math.max(0, dist - 0.46), 2) * 1.4;
+    // Mountain ranges: where a ridge noise peaks over already-high land, push it
+    // up into hills and snow-capped mountains.
+    const ridge = fbm(detailNoise, nx * 0.13 + 200, ny * 0.13 + 200, 2);
+    if (elevation > 0.48) elevation += Math.max(0, ridge - 0.52) * 1.7;
     elevation = Math.max(0, Math.min(1, elevation));
 
     const moisture = fbm(moistNoise, nx * scale + 50, ny * scale + 50, 4);

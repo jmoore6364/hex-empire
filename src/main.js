@@ -522,6 +522,7 @@ function animate(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
   camRig.update(dt);
+  view.animateWater(now / 1000);
   for (const u of game.units) u.update(dt);
   game.fx.update(dt);
   // Carry out a deferred unit-advance once everything has stopped animating.

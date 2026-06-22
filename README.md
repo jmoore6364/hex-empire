@@ -71,8 +71,10 @@ civilizations** spread across the map — who also war with each other.
   continent ringed by ocean, scattered islands, and enclosed inland lakes, across
   every terrain type (plains, grassland, forest, desert, tundra, snow, hills,
   mountains). Per-tile colour variation, ACES tone mapping, a gradient sky and
-  soft sun shadows give it depth. Rendered as a single InstancedMesh so even
-  ~2000 tiles stay cheap.
+  soft sun shadows give it depth, dressed with **instanced low-poly forests,
+  snow-capped mountain ranges, and gently shimmering water**. Tiles are a single
+  InstancedMesh and the props are instanced too, so even ~2000 tiles stay cheap;
+  forests and peaks hide under fog until explored.
   Deterministic per random seed each load; both civs start on the main landmass,
   and the outer islands are reachable once you research Sailing.
 - **RTS camera** — pan / zoom / rotate / orbit.
