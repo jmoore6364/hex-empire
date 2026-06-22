@@ -152,25 +152,35 @@ export class Unit {
     return g;
   }
 
-  // A rigged GLTF character with idle/walk animation, on an owner-coloured base.
+  // A little squad of three small rigged characters clustered on the tile, with
+  // idle/walk animation (one shared mixer, staggered so they don't march in sync).
   _buildModel() {
     const g = new THREE.Group();
-    const m = makeModel(this.def.model);
-    const root = m.scene;
-    root.scale.setScalar(m.def.scale);
-    root.traverse((o) => {
-      if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; if (o.material) o.material = o.material.clone(); }
-    });
-    g.add(root);
-    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.32, 0.32, 0.06, 14),
-      new THREE.MeshStandardMaterial({ color: OWNER_COLOR[this.owner], flatShading: true, emissive: OWNER_COLOR[this.owner], emissiveIntensity: 0.3, roughness: 0.6 }));
-    disc.position.y = 0.03; disc.castShadow = true; g.add(disc);
+    this.mixer = new THREE.AnimationMixer(g);
+    this.idleActions = [];
+    this.walkActions = [];
+    const proto = makeModel(this.def.model);
+    const scale = proto.def.scale * 0.38;
+    const find = (anims, name) => name && THREE.AnimationClip.findByName(anims, name);
+    const spots = [[0, 0.3], [-0.27, -0.16], [0.27, -0.16]]; // spread triangle on the tile
 
-    this.mixer = new THREE.AnimationMixer(root);
-    const find = (name) => THREE.AnimationClip.findByName(m.animations, name);
-    this.idleAction = (m.def.idle && find(m.def.idle)) ? this.mixer.clipAction(find(m.def.idle)) : null;
-    this.walkAction = (m.def.walk && find(m.def.walk)) ? this.mixer.clipAction(find(m.def.walk)) : null;
-    if (this.idleAction) this.idleAction.play();
+    spots.forEach(([ox, oz], i) => {
+      const m = i === 0 ? proto : makeModel(this.def.model);
+      const root = m.scene;
+      root.scale.setScalar(scale);
+      root.position.set(ox, 0, oz);
+      root.rotation.y = i * 2.2;          // each faces a slightly different way
+      root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; if (o.material) o.material = o.material.clone(); } });
+      g.add(root);
+      const idle = find(m.animations, m.def.idle);
+      const walk = find(m.animations, m.def.walk);
+      if (idle) { const a = this.mixer.clipAction(idle, root); a.time = i * 0.4; a.play(); this.idleActions.push(a); }
+      if (walk) this.walkActions.push(this.mixer.clipAction(walk, root));
+    });
+
+    const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 16),
+      new THREE.MeshStandardMaterial({ color: OWNER_COLOR[this.owner], flatShading: true, emissive: OWNER_COLOR[this.owner], emissiveIntensity: 0.3, roughness: 0.6 }));
+    disc.position.y = 0.025; disc.castShadow = true; g.add(disc);
     return g;
   }
 
@@ -196,12 +206,12 @@ export class Unit {
     if (this.mixer) {
       this.mixer.update(dt);
       const want = this.waypoints.length ? 'walk' : 'idle';
-      if (want !== this._anim && this.idleAction && this.walkAction) {
+      if (want !== this._anim && this.idleActions && this.walkActions.length) {
         this._anim = want;
-        const to = want === 'walk' ? this.walkAction : this.idleAction;
-        const from = want === 'walk' ? this.idleAction : this.walkAction;
-        to.reset().setEffectiveWeight(1).fadeIn(0.2).play();
-        from.fadeOut(0.2);
+        const tos = want === 'walk' ? this.walkActions : this.idleActions;
+        const froms = want === 'walk' ? this.idleActions : this.walkActions;
+        tos.forEach((a) => a.reset().setEffectiveWeight(1).fadeIn(0.2).play());
+        froms.forEach((a) => a.fadeOut(0.2));
       }
     }
     if (!this.waypoints.length) return;

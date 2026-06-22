@@ -136,9 +136,10 @@ civilizations** spread across the map — who also war with each other.
   with its own low-poly model: Horseman, Swordsman, Catapult, Crossbowman,
   Musketman, Artillery, Tank and the Airplane, alongside the economy/defense
   buildings above. Units only appear in a city's build menu once their tech is in.
-- **Rigged character models** — soldier-type units use a **rigged GLTF model**
-  with **idle/walk animation** (a CC0 RobotExpressive, by Tomás Laulhé /
-  Don McCurdy) on an owner-coloured base, loaded via Three's GLTFLoader. It's a
+- **Rigged character models** — soldier-type units are a **little squad of three
+  small rigged characters** with **idle/walk animation** (a CC0 RobotExpressive,
+  by Tomás Laulhé / Don McCurdy) clustered on an owner-coloured base, loaded via
+  Three's GLTFLoader. It's a
   progressive enhancement: if the model can't load, units fall back to their
   procedural meshes. Drop your own rigged `.glb` (from Meshy / Tripo / Mixamo /
   Quaternius…) into `vendor/models/` and register it in `src/models.js`.
