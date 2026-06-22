@@ -17,8 +17,16 @@ const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhol
 // Civ display names by owner index (0 = the human player).
 const CIV_NAMES = ['Your Empire', 'Crimson', 'Verdant', 'Amber', 'Violet'];
 
+// AI strength by difficulty: `mul` scales AI civ income/production, `combat`
+// adds to AI attack strength.
+const DIFFICULTY = {
+  easy:   { mul: 0.8,  combat: 0 },
+  normal: { mul: 1.0,  combat: 0 },
+  hard:   { mul: 1.35, combat: 2 },
+};
+
 export class Game {
-  constructor(scene, worldView, numCivs = 2, civConfigs = null) {
+  constructor(scene, worldView, numCivs = 2, civConfigs = null, opts = {}) {
     this.scene = scene;
     this.view = worldView;
     this.world = worldView.world;
@@ -52,6 +60,10 @@ export class Game {
       });
     }
     this.treasury = this.civs[0].treasury; // back-compat alias for the HUD
+
+    this.difficulty = opts.difficulty || 'normal';
+    this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
+    this.turnLimit = opts.turnLimit || null; // score victory at this turn, if set
   }
 
   // --- spawning -------------------------------------------------------------
@@ -373,6 +385,7 @@ export class Game {
     merge(civ.trait?.effect);
     merge(GOVERNMENTS[civ.government]?.bonus);
     for (const id of civ.policies) merge(POLICIES[id]?.effect);
+    if (owner !== 0 && this._diff) mods.combat += this._diff.combat; // AI combat handicap
     return mods;
   }
 
@@ -568,10 +581,12 @@ export class Game {
         if (c.borderProgress >= cost) { c.borderProgress -= cost; c.borderRadius = rad + 1; if (owner === 0) this.events.push(`${c.name}'s borders expanded`); }
       }
       this._processProduction(c);
+      const mul = owner === 0 ? 1 : this._diff.mul; // AI handicap by difficulty
+      if (mul !== 1) c.production += y.prod * (mul - 1);
       c.hp = Math.min(this.cityMaxHp(c), c.hp + 8); // walls heal between assaults
-      civ.treasury.gold += y.gold;
-      civ.treasury.science += y.science;
-      civ.treasury.culture += y.culture;
+      civ.treasury.gold += y.gold * mul;
+      civ.treasury.science += y.science * mul;
+      civ.treasury.culture += y.culture * mul;
     }
     this._processResearch(civ);
     this._processCivics(civ);
@@ -610,6 +625,8 @@ export class Game {
         policies: [...v.policies],
       })),
       wars: [...this.wars],
+      difficulty: this.difficulty,
+      turnLimit: this.turnLimit,
       gameOver: this.gameOver,
     };
   }
@@ -655,6 +672,9 @@ export class Game {
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);
+    this.difficulty = data.difficulty || 'normal';
+    this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
+    this.turnLimit = data.turnLimit || null;
     this.gameOver = data.gameOver || null;
     this.recomputeOwnership();
     this.income = this.computeIncome(0);
@@ -675,7 +695,26 @@ export class Game {
     }
     if (!alive(0)) { this.gameOver = { win: false, reason: 'Your empire has fallen.' }; return; }
     const rivals = this.civs.slice(1).filter(c => alive(c.owner));
-    if (rivals.length === 0) this.gameOver = { win: true, reason: 'Every rival civilization has been conquered.' };
+    if (rivals.length === 0) { this.gameOver = { win: true, reason: 'Every rival civilization has been conquered.' }; return; }
+
+    // Score victory: at the turn limit, the highest-scoring surviving civ wins.
+    if (this.turnLimit && this.turn > this.turnLimit) {
+      const ranked = this.civs.map((c, o) => ({ o, s: this._score(o) })).filter(x => alive(x.o)).sort((a, b) => b.s - a.s);
+      const top = ranked[0];
+      this.gameOver = top.o === 0
+        ? { win: true, reason: `Turn limit reached — you led on score (${top.s}).` }
+        : { win: false, reason: `Turn limit reached — ${this.civs[top.o].name} led on score (${top.s}).` };
+    }
+  }
+
+  // A civ's score: cities & population, knowledge, and claimed territory.
+  _score(owner) {
+    let s = 0;
+    for (const c of this.cities) if (c.owner === owner) s += 5 + c.population;
+    const civ = this.civs[owner];
+    s += civ.research.researched.size * 3 + civ.civics.researched.size * 2;
+    for (const [, c] of this.ownership) if (c.owner === owner) s += 1;
+    return s;
   }
 
   // --- turns ----------------------------------------------------------------

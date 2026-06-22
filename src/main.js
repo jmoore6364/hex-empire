@@ -46,6 +46,8 @@ function chooseStartOptions() {
         load: false, civ: chosen,
         radius: +document.getElementById('opt-map').value,
         numAI: +document.getElementById('opt-ai').value,
+        difficulty: document.getElementById('opt-diff').value,
+        turnLimit: +document.getElementById('opt-turns').value || null,
         sound: document.getElementById('opt-sound').checked,
       });
     };
@@ -134,7 +136,8 @@ const world = generateWorld(MAP_RADIUS, seed);
 const view = new WorldView(scene, world);
 view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 
-const game = new Game(scene, view, saveData ? saveData.civs.length : 1 + NUM_AI, civConfigs);
+const game = new Game(scene, view, saveData ? saveData.civs.length : 1 + NUM_AI, civConfigs,
+  saveData ? {} : { difficulty: startOpts.difficulty, turnLimit: startOpts.turnLimit });
 game.fx = new Effects(scene);   // combat animations
 const ui = new UI();
 let researchNudged = false;     // so the "pick a tech" nudge only auto-opens once

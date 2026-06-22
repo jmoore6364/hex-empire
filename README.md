@@ -71,10 +71,12 @@ civilizations** spread across the map — who also war with each other.
   with its own colour and a unique **trait** — Seafarers −30% settler cost,
   Warmongers +3 combat, Cultivators +15% food, Merchants +25% gold, Scholars
   +25% science, Industrious +15% production), plus **settings**: map size
-  (Small/Medium/Large), number of AI opponents (1–4), and sound on/off. Your
-  chosen civ sets your colour and bonus; the AIs take distinct civs. **Continue**
-  resumes the autosave. Traits fold straight into the modifier system, so they
-  apply to yields, combat and unit costs everywhere.
+  (Small/Medium/Large), number of AI opponents (1–4), **difficulty**
+  (Easy/Normal/Hard — scales AI income & combat), an optional **turn limit**
+  (Off/150/250 → score victory), and sound on/off. Your chosen civ sets your
+  colour and bonus; the AIs take distinct civs. **Continue** resumes the
+  autosave. Traits fold straight into the modifier system, so they apply to
+  yields, combat and unit costs everywhere.
 
 **Pass 1 — the playable core**
 
@@ -175,9 +177,10 @@ civilizations** spread across the map — who also war with each other.
   fights are wars of attrition rather than one-shots.
 - **City capture & victory** — cities have defense HP (boosted by population and
   City Walls) that regenerates between assaults. Wear a city down and march a
-  melee unit in to capture it. Win by **domination** (eliminate the AI) or by
-  reaching **Flight**; a game-over screen offers a fresh game. The AI besieges
-  your cities too.
+  melee unit in to capture it. Win by **domination** (eliminate the AI), by
+  reaching **Flight**, or — if a turn limit is set — by leading on **score**
+  (cities, population, knowledge and territory) when the clock runs out; a
+  game-over screen offers a fresh game. The AI besieges your cities too.
 - **Terrain defense** — defenders on hills, forest and mountains take less
   damage, so where you fight matters.
 
