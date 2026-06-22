@@ -433,6 +433,60 @@ export class Game {
     u.hp = Math.min(u.def.hp, u.hp + amt);
   }
 
+  // --- save / load ----------------------------------------------------------
+  // A plain-data snapshot. The map regenerates identically from its seed, so we
+  // only persist the seed plus the mutable game state.
+  serialize() {
+    return {
+      v: 1,
+      seed: this.world.seed,
+      radius: this.world.radius,
+      turn: this.turn,
+      cityNameIdx: this.cityNameIdx,
+      explored: [...this.explored],
+      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
+      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, queue: c.queue, buildings: [...c.buildings] })),
+      civs: this.civs.map(v => ({ treasury: { ...v.treasury }, research: { researched: [...v.research.researched], queue: [...v.research.queue] } })),
+      gameOver: this.gameOver,
+    };
+  }
+
+  // Rebuild entities from a snapshot (the world must already be generated from
+  // the same seed). Replaces any current units/cities.
+  restore(data) {
+    for (const u of this.units) this.scene.remove(u.mesh);
+    for (const c of this.cities) this.scene.remove(c.mesh);
+    this.units = []; this.cities = [];
+    this.turn = data.turn;
+    this.cityNameIdx = data.cityNameIdx || 0;
+    this.explored = new Set(data.explored || []);
+
+    for (const cd of data.cities) {
+      const city = new City(cd.owner, cd.q, cd.r, cd.name);
+      city.population = cd.population; city.food = cd.food; city.production = cd.production;
+      city.hp = cd.hp; city.queue = cd.queue || []; city.buildings = new Set(cd.buildings || []);
+      city.placeAt(this.view);
+      this.scene.add(city.mesh);
+      this.cities.push(city);
+    }
+    for (const ud of data.units) {
+      const u = this.spawnUnit(ud.type, ud.owner, ud.q, ud.r);
+      u.hp = ud.hp; u.move = ud.move; u.setEmbarked(!!ud.embarked);
+    }
+    this.civs.forEach((v, i) => {
+      const cd = data.civs[i];
+      if (!cd) return;
+      v.treasury = { gold: cd.treasury.gold || 0, science: cd.treasury.science || 0 };
+      v.research.researched = new Set(cd.research.researched || []);
+      v.research.queue = cd.research.queue || [];
+    });
+    this.treasury = this.civs[0].treasury;
+    this.gameOver = data.gameOver || null;
+    this.recomputeOwnership();
+    this.income = this.computeIncome(0);
+    this.recomputeFog();
+  }
+
   // Decide the game once a civ is wiped out or someone reaches Flight.
   _checkGameOver() {
     if (this.gameOver) return;

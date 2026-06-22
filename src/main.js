@@ -51,8 +51,18 @@ sun.shadow.camera.far = 160;
 scene.add(sun);
 
 // --- world & game ------------------------------------------------------------
-const seed = Math.floor(Math.random() * 1e9);
-const world = generateWorld(MAP_RADIUS, seed);
+// Resume a saved game when the player chose Load; otherwise generate a fresh one.
+let saveData = null;
+try {
+  if (sessionStorage.getItem('hexempire-load')) {
+    const raw = localStorage.getItem('hexempire-save');
+    if (raw) saveData = JSON.parse(raw);
+  }
+} catch (e) { saveData = null; }
+sessionStorage.removeItem('hexempire-load');
+
+const seed = saveData ? saveData.seed : Math.floor(Math.random() * 1e9);
+const world = generateWorld(saveData ? (saveData.radius || MAP_RADIUS) : MAP_RADIUS, seed);
 const view = new WorldView(scene, world);
 view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 
@@ -70,26 +80,32 @@ function freeNeighbor(q, r) {
   return { q, r };
 }
 
-const start = findStartTile(world);
-game.spawnUnit('settler', 0, start.q, start.r);
-const w1 = freeNeighbor(start.q, start.r);
-game.spawnUnit('warrior', 0, w1.q, w1.r);
-const s1 = freeNeighbor(w1.q, w1.r);
-game.spawnUnit('scout', 0, s1.q, s1.r);
+let start;
+if (saveData) {
+  game.restore(saveData);
+  start = game.cities.find(c => c.owner === 0) || game.units.find(u => u.owner === 0) || findStartTile(world);
+} else {
+  start = findStartTile(world);
+  game.spawnUnit('settler', 0, start.q, start.r);
+  const w1 = freeNeighbor(start.q, start.r);
+  game.spawnUnit('warrior', 0, w1.q, w1.r);
+  const s1 = freeNeighbor(w1.q, w1.r);
+  game.spawnUnit('scout', 0, s1.q, s1.r);
 
-// AI starts on the far side of the *player's landmass* so the two can meet by
-// land (no naval movement yet — other islands are for exploring).
-const landmass = connectedLand(world.tiles, start);
-let aiStart = start, far = -1;
-for (const k of landmass) {
-  const t = world.tiles.get(k);
-  if (t.terrain === 'MOUNTAIN') continue;
-  const d = distance(start, t);
-  if (d > far) { far = d; aiStart = t; }
+  // AI starts on the far side of the *player's landmass* so the two can meet by
+  // land (no naval movement yet — other islands are for exploring).
+  const landmass = connectedLand(world.tiles, start);
+  let aiStart = start, far = -1;
+  for (const k of landmass) {
+    const t = world.tiles.get(k);
+    if (t.terrain === 'MOUNTAIN') continue;
+    const d = distance(start, t);
+    if (d > far) { far = d; aiStart = t; }
+  }
+  game.spawnUnit('settler', 1, aiStart.q, aiStart.r);
+  const aw = freeNeighbor(aiStart.q, aiStart.r);
+  game.spawnUnit('warrior', 1, aw.q, aw.r);
 }
-game.spawnUnit('settler', 1, aiStart.q, aiStart.r);
-const aw = freeNeighbor(aiStart.q, aiStart.r);
-game.spawnUnit('warrior', 1, aw.q, aw.r);
 
 game.income = game.computeIncome();
 game.recomputeFog();
@@ -111,6 +127,22 @@ document.getElementById('go-new').addEventListener('click', () => location.reloa
 const researchPanel = new ResearchPanel(game);
 researchPanel.onPick((id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); });
 researchPanel.syncButton();
+
+// --- save / load -------------------------------------------------------------
+const SAVE_KEY = 'hexempire-save';
+function saveGame(announce) {
+  try {
+    localStorage.setItem(SAVE_KEY, JSON.stringify(game.serialize()));
+    if (announce) ui.toast('Game saved', '#9fd0ff');
+  } catch (e) { if (announce) ui.toast('Save failed', '#e88'); }
+}
+document.getElementById('save-btn').addEventListener('click', () => saveGame(true));
+document.getElementById('load-btn').addEventListener('click', () => {
+  if (!localStorage.getItem(SAVE_KEY)) { ui.toast('No saved game', '#e88'); return; }
+  sessionStorage.setItem('hexempire-load', '1');
+  location.reload();
+});
+if (saveData) ui.toast(`Resumed — turn ${game.turn}`, '#9fd0ff');
 
 const camRig = new CameraRig(camera, renderer.domElement, MAP_RADIUS * 2.1);
 { const top = view.topOf(start.q, start.r); camRig.focus(top.x, top.z, top.y); }
@@ -349,6 +381,8 @@ function endTurn() {
     if (ev.some(m => m.startsWith('Researched'))) researchPanel.open();
     else if (!researchNudged) { researchPanel.open(); researchNudged = true; }
   }
+
+  saveGame(false); // autosave each turn so a refresh + Load resumes here
 }
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
@@ -386,9 +420,11 @@ window.addEventListener('resize', onResize);
 // visualViewport fires on mobile zoom/keyboard changes that don't trigger resize.
 if (window.visualViewport) window.visualViewport.addEventListener('resize', onResize);
 
-// Select the starting settler so the player has something to do immediately.
-selectUnit(game.units[0]);
+// Select a player unit so there's something to do immediately, and surface the
+// game-over screen if a finished game was loaded.
+{ const u = game.units.find(x => x.owner === 0); if (u) selectUnit(u, true); else deselect(); }
+checkGameOver();
 
 // Debug / test handle: lets the headless smoke test (and the browser console)
 // inspect live game and camera state.
-window.__hex = { game, view, ui, camRig };
+window.__hex = { game, view, ui, camRig, saveGame };

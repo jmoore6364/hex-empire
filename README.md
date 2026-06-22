@@ -41,6 +41,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | **🔬 Research** button | Open the tech tree; click any tech to queue the path to it |
 | `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect / close drawer |
+| **💾 Save / 📂 Load** | Save the game to your browser and resume it later (it also autosaves each turn) |
 
 When a unit uses up its movement (or attacks), selection automatically advances
 to your next unit with moves left and the camera pans to it — so you can play a
@@ -93,6 +94,9 @@ far side of the continent.
 - **City territory** — each city claims the hexes within radius 2 (nearest city
   wins contested tiles) and works the best of them by population. Owner-colored
   borders are drawn on the map.
+- **Save / load** — save your game to the browser (localStorage) and resume it
+  any time; it also autosaves every turn, so a refresh + Load picks up where you
+  left off. The map regenerates identically from its seed, so a save is tiny.
 - **AI economy & strategy** — the Crimson AI researches, queues production,
   sends settlers out to expand, **rushes defenders or City Walls when its cities
   are threatened**, sieges your cities, and **pulls wounded units back to heal**.
