@@ -122,10 +122,11 @@ civilizations** spread across the map — who also war with each other.
 - **Buildings** — Granary/Aqueduct (+food), Workshop/Factory (+prod),
   Market/Bank (+gold), Library/University (+science) multiply their city's
   yields; City Walls fortify a garrison. Each is gated by its tech.
-- **City territory & expanding borders** — each city claims the hexes around it
-  (nearest city wins contested tiles) and works the best of them by population. A
-  city's claim **grows over time** as it banks culture — its border radius
-  expands from 2 out to 4, popping new tiles like Civ. Territory is drawn with a
+- **City territory & expanding borders** — a city starts with the **six tiles
+  around it** and then claims **one new tile at a time** as it banks culture,
+  automatically steering toward the best unclaimed frontier tile — **resources and
+  rivers first** — so borders grow organically into rich land (capped a few tiles
+  out). It works the best of its tiles by population. Territory is drawn with a
   **crisp owner-coloured border outline** (inset so neighbouring civs' borders sit
   side by side) over a faint colour wash, so who owns what is clear at a glance.
 - **Sound effects** — selection, movement, combat, founding, building, research

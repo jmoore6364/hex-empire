@@ -5,7 +5,7 @@ import { generateWorld, findStartTile, connectedLand, isWater, TERRAIN } from '.
 import { findPath, reachable } from '../src/pathfinding.js';
 import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
-import { computeOwnership, ownedTiles } from '../src/territory.js';
+import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/territory.js';
 import { cityYields } from '../src/economy.js';
 import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
@@ -149,13 +149,20 @@ check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']
   const tg = new Map();
   for (const { q, r } of hexMap(4)) tg.set(key(q, r), { q, r, passable: true, moveCost: 1, terrain: 'PLAINS', yields: { food: 1, prod: 1, gold: 0 } });
   const cityA = { q: -2, r: 0 }, cityB = { q: 2, r: 0 };
-  const own = computeOwnership([cityA, cityB], tg, 2);
+  cityA.tiles = initialClaim(cityA, tg);
+  cityB.tiles = initialClaim(cityB, tg, computeOwnership([cityA]));
+  check('initial claim is centre + six neighbours', cityA.tiles.size === 7);
+  const own = computeOwnership([cityA, cityB]);
   check('ownership claims tiles around cities', own.size > 0);
   check('each owned tile has exactly one owner', [...own.values()].every(c => c === cityA || c === cityB));
   check('a tile is never owned by two cities', own.get(key(-2, 0)) === cityA && own.get(key(2, 0)) === cityB);
-  const ownA = ownedTiles(cityA, own, tg);
+  const ownA = ownedTiles(cityA, tg);
   check('ownedTiles excludes the city center', !ownA.some(t => t.q === -2 && t.r === 0));
   check('ownedTiles all belong to that city', ownA.every(t => own.get(key(t.q, t.r)) === cityA));
+  // expansion prefers the resource tile on the frontier
+  tg.get(key(-2, 2)).resource = 'wheat';
+  const grew = expandClaim(cityA, cityA.tiles, tg, own, (t) => (t.resource ? 10 : t.yields.food), 3);
+  check('expandClaim returns a frontier tile', typeof grew === 'string' && !cityA.tiles.has(grew));
 }
 
 // --- per-city yields ---

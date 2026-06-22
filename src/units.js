@@ -251,8 +251,8 @@ export class City {
     this.queue = [];            // build items: { kind:'unit'|'building', id, name, cost }
     this.buildings = new Set(); // constructed building ids
     this.hp = 0;                // defence; set to max when founded (see game.js)
-    this.borderRadius = 2;      // territory radius; grows with accumulated culture
-    this.borderProgress = 0;    // culture banked toward the next border expansion
+    this.tiles = new Set();     // owned tile-keys; grows one tile at a time
+    this.borderProgress = 0;    // culture banked toward claiming the next tile
     this.ownerMats = [];        // materials recoloured when the city changes hands
     this.mesh = this._build();
   }
