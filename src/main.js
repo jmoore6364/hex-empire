@@ -208,6 +208,14 @@ const muteBtn = document.getElementById('mute-btn');
 muteBtn.textContent = sound.enabled ? '🔊' : '🔇';
 muteBtn.addEventListener('click', () => { sound.setEnabled(!sound.enabled); muteBtn.textContent = sound.enabled ? '🔊' : '🔇'; if (sound.enabled) sound.play('select'); });
 
+// Ambient background music (own toggle; starts on the Start-button gesture).
+const musicBtn = document.getElementById('music-btn');
+const wantMusic = localStorage.getItem('hexempire-music') !== '0';
+if (wantMusic && (startOpts.load || startOpts.sound !== false)) sound.startMusic();
+const syncMusicBtn = () => { musicBtn.style.opacity = sound.musicOn ? '1' : '0.45'; };
+syncMusicBtn();
+musicBtn.addEventListener('click', () => { if (sound.musicOn) sound.stopMusic(); else sound.startMusic(); syncMusicBtn(); });
+
 // Research (science) and Civics (culture) tree drawers.
 const researchPanel = new TreePanel(game, {
   ids: { drawer: 'research', tree: 'tech-tree', current: 'research-current', btn: 'research-btn', close: 'research-close' },
