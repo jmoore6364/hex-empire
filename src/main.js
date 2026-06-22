@@ -13,6 +13,7 @@ import { Effects } from './effects.js';
 import { ResearchPanel } from './researchui.js';
 
 const MAP_RADIUS = 26;
+const NUM_AI = 2;       // rival AI civilizations (plus the human player)
 
 // The actual *visible* viewport. On mobile, window.innerWidth/Height can report
 // the (larger) layout viewport when the page is zoomed, which would push the
@@ -66,7 +67,7 @@ const world = generateWorld(saveData ? (saveData.radius || MAP_RADIUS) : MAP_RAD
 const view = new WorldView(scene, world);
 view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 
-const game = new Game(scene, view);
+const game = new Game(scene, view, 1 + NUM_AI);
 game.fx = new Effects(scene);   // combat animations
 const ui = new UI();
 let researchNudged = false;     // so the "pick a tech" nudge only auto-opens once
@@ -92,19 +93,23 @@ if (saveData) {
   const s1 = freeNeighbor(w1.q, w1.r);
   game.spawnUnit('scout', 0, s1.q, s1.r);
 
-  // AI starts on the far side of the *player's landmass* so the two can meet by
-  // land (no naval movement yet — other islands are for exploring).
-  const landmass = connectedLand(world.tiles, start);
-  let aiStart = start, far = -1;
-  for (const k of landmass) {
-    const t = world.tiles.get(k);
-    if (t.terrain === 'MOUNTAIN') continue;
-    const d = distance(start, t);
-    if (d > far) { far = d; aiStart = t; }
+  // Place each AI civ at the far reaches of the player's landmass (spread apart
+  // by farthest-point sampling) so everyone can meet by land.
+  const landTiles = [...connectedLand(world.tiles, start)]
+    .map(k => world.tiles.get(k))
+    .filter(t => t.terrain !== 'MOUNTAIN');
+  const placed = [start];
+  for (let owner = 1; owner <= NUM_AI; owner++) {
+    let spot = start, best = -1;
+    for (const t of landTiles) {
+      const d = Math.min(...placed.map(p => distance(p, t)));
+      if (d > best) { best = d; spot = t; }
+    }
+    placed.push(spot);
+    game.spawnUnit('settler', owner, spot.q, spot.r);
+    const aw = freeNeighbor(spot.q, spot.r);
+    game.spawnUnit('warrior', owner, aw.q, aw.r);
   }
-  game.spawnUnit('settler', 1, aiStart.q, aiStart.r);
-  const aw = freeNeighbor(aiStart.q, aiStart.r);
-  game.spawnUnit('warrior', 1, aw.q, aw.r);
 }
 
 game.income = game.computeIncome();

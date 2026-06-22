@@ -13,9 +13,11 @@ import { resolveAttack } from './combat.js';
 import { isWater } from './worldgen.js';
 
 const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhollow', 'Saltspire', 'Ironford', 'Dawnvale'];
+// Civ display names by owner index (0 = the human player).
+const CIV_NAMES = ['Your Empire', 'Crimson', 'Verdant', 'Amber', 'Violet'];
 
 export class Game {
-  constructor(scene, worldView) {
+  constructor(scene, worldView, numCivs = 2) {
     this.scene = scene;
     this.view = worldView;
     this.world = worldView.world;
@@ -31,12 +33,12 @@ export class Game {
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
 
-    // Per-civ state: 0 = player, 1 = AI. Science accrues in treasury.science as a
+    // Per-civ state: 0 = player, 1+ = AI. Science accrues in treasury.science as a
     // research "bank" that is spent when the current tech's cost is met.
-    this.civs = [
-      { owner: 0, name: 'Your Empire', treasury: { gold: 0, science: 0 }, research: { researched: new Set(), queue: [] } },
-      { owner: 1, name: 'Crimson',     treasury: { gold: 0, science: 0 }, research: { researched: new Set(), queue: [] } },
-    ];
+    this.civs = [];
+    for (let i = 0; i < numCivs; i++) {
+      this.civs.push({ owner: i, name: CIV_NAMES[i] || `Civ ${i}`, treasury: { gold: 0, science: 0 }, research: { researched: new Set(), queue: [] } });
+    }
     this.treasury = this.civs[0].treasury; // back-compat alias for the HUD
   }
 
@@ -173,9 +175,8 @@ export class Game {
     const here = this.tiles.get(key(unit.q, unit.r));
     if (!here || !here.passable) return { ok: false, msg: 'Must be on land to found a city' };
     if (this.cityAt(unit.q, unit.r)) return { ok: false, msg: 'Already a city here' };
-    const name = unit.owner === 0
-      ? CITY_NAMES[this.cityNameIdx++ % CITY_NAMES.length]
-      : 'Crimson ' + CITY_NAMES[this.cityNameIdx++ % CITY_NAMES.length];
+    const baseName = CITY_NAMES[this.cityNameIdx++ % CITY_NAMES.length];
+    const name = unit.owner === 0 ? baseName : `${this.civs[unit.owner].name} ${baseName}`;
     const city = new City(unit.owner, unit.q, unit.r, name);
     city.placeAt(this.view);
     this.scene.add(city.mesh);
@@ -491,10 +492,17 @@ export class Game {
   _checkGameOver() {
     if (this.gameOver) return;
     const alive = (owner) => this.cities.some(c => c.owner === owner) || this.units.some(u => u.owner === owner);
-    if (this.civs[0].research.researched.has('flight')) this.gameOver = { win: true, reason: 'Flight achieved — your aircraft rule the skies!' };
-    else if (this.civs[1].research.researched.has('flight')) this.gameOver = { win: false, reason: 'Crimson reached Flight first.' };
-    else if (!alive(1)) this.gameOver = { win: true, reason: 'Crimson has been wiped from the map.' };
-    else if (!alive(0)) this.gameOver = { win: false, reason: 'Your empire has fallen.' };
+    for (let o = 0; o < this.civs.length; o++) {
+      if (this.civs[o].research.researched.has('flight')) {
+        this.gameOver = o === 0
+          ? { win: true, reason: 'Flight achieved — your aircraft rule the skies!' }
+          : { win: false, reason: `${this.civs[o].name} reached Flight first.` };
+        return;
+      }
+    }
+    if (!alive(0)) { this.gameOver = { win: false, reason: 'Your empire has fallen.' }; return; }
+    const rivals = this.civs.slice(1).filter(c => alive(c.owner));
+    if (rivals.length === 0) this.gameOver = { win: true, reason: 'Every rival civilization has been conquered.' };
   }
 
   // --- turns ----------------------------------------------------------------
@@ -502,7 +510,7 @@ export class Game {
     this.events = [];
     this._runAI();
 
-    this._processEconomy(1); // AI economy
+    for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
     this._processEconomy(0); // player economy
     this.income = this.computeIncome(0);
 
@@ -520,8 +528,14 @@ export class Game {
   // A simple opponent: research the cheapest tech, queue settlers to expand then
   // buildings and military, and push units toward the player.
   _runAI() {
-    const civ = this.civs[1];
-    for (const u of this.units) if (u.owner === 1) {
+    for (let owner = 1; owner < this.civs.length; owner++) this._runAICiv(owner);
+  }
+
+  // One AI civilization's whole turn: heal, research, produce, and move/fight
+  // against every rival (the player and other AI civs alike).
+  _runAICiv(owner) {
+    const civ = this.civs[owner];
+    for (const u of this.units) if (u.owner === owner) {
       if (u.move === u.def.move) this._heal(u); // idle units recover
       u.move = u.def.move;
     }
@@ -533,37 +547,36 @@ export class Game {
     }
 
     // Production: defend threatened cities first, then expand, build, and arm.
-    const aiCities = this.cities.filter(c => c.owner === 1);
-    const aiSettlers = this.units.filter(u => u.owner === 1 && u.def.canFound).length;
-    for (const c of aiCities) {
+    const myCities = this.cities.filter(c => c.owner === owner);
+    const mySettlers = this.units.filter(u => u.owner === owner && u.def.canFound).length;
+    for (const c of myCities) {
       if (c.queue.length) continue;
       const unlocked = unlockedBuildings(civ.research.researched).filter(id => !c.buildings.has(id));
-      const threatened = this.units.some(e => e.owner === 0 && distance(e, c) <= 5);
-      const defended = this.units.some(u => u.owner === 1 && u.def.attack && !u.def.canFound && distance(u, c) <= 3);
+      const threatened = this.units.some(e => e.owner !== owner && distance(e, c) <= 5);
+      const defended = this.units.some(u => u.owner === owner && u.def.attack && !u.def.canFound && distance(u, c) <= 3);
       if (threatened && !defended) {
-        // Rush walls if we can, otherwise the strongest defender available.
         if (civ.research.researched.has('masonry') && !c.buildings.has('walls')) c.queue.push(this._aiItem('building', 'walls'));
-        else c.queue.push(this._aiItem('unit', this._aiBestUnit()));
-      } else if (aiCities.length < 3 && aiSettlers === 0) {
+        else c.queue.push(this._aiItem('unit', this._aiBestUnit(owner)));
+      } else if (myCities.length < 3 && mySettlers === 0) {
         c.queue.push(this._aiItem('unit', 'settler'));
       } else if (unlocked.length) {
         c.queue.push(this._aiItem('building', unlocked[0]));
       } else {
-        c.queue.push(this._aiItem('unit', this._aiBestUnit()));
+        c.queue.push(this._aiItem('unit', this._aiBestUnit(owner)));
       }
     }
 
-    // Movement: settlers expand, others scout/hunt the player.
-    for (const u of this.units.filter(u => u.owner === 1)) {
+    // Movement: settlers expand, others scout/hunt any rival.
+    for (const u of this.units.filter(u => u.owner === owner)) {
       if (u.def.canFound) {
         const tile = this.tiles.get(key(u.q, u.r));
-        const crowded = this.cities.some(c => c.owner === 1 && distance(c, u) < 3);
+        const crowded = this.cities.some(c => distance(c, u) < 3);
         if (tile && tile.passable && !crowded && !this.cityAt(u.q, u.r)) { this.foundCity(u); continue; }
       }
 
       // Badly wounded units break off and fall back to the nearest city to heal.
       if (u.def.attack && u.hp < u.def.hp * 0.4) {
-        const refuge = this.cities.filter(c => c.owner === 1).sort((a, b) => distance(u, a) - distance(u, b))[0];
+        const refuge = this.cities.filter(c => c.owner === owner).sort((a, b) => distance(u, a) - distance(u, b))[0];
         if (refuge) {
           const opts = this._moveOpts(u);
           const reach = reachable(this.tiles, u, u.move, this.occupied(u), opts);
@@ -574,20 +587,18 @@ export class Game {
         }
       }
 
-      // Head toward the nearest visible player asset, else wander.
-      const targets = [...this.units.filter(t => t.owner === 0), ...this.cities.filter(c => c.owner === 0)];
+      // Head toward the nearest visible rival asset, else wander.
+      const targets = [...this.units.filter(t => t.owner !== owner), ...this.cities.filter(c => c.owner !== owner)];
       let dest = null;
       if (targets.length && u.def.attack) {
-        // Shoot/strike the nearest enemy unit already within reach.
         const range = u.def.range || 1;
         const inReach = this.units
-          .filter(e => e.owner === 0)
+          .filter(e => e.owner !== owner)
           .sort((a, b) => distance(u, a) - distance(u, b))
           .find(e => distance(u, e) >= 1 && distance(u, e) <= range);
         if (inReach) { this.resolveCombat(u, inReach, range > 1); continue; }
-        // Besiege an undefended player city within reach.
         if (!u.embarked) {
-          const city = this.cities.find(c => c.owner === 0 && !this.unitAt(c.q, c.r) && distance(u, c) >= 1 && distance(u, c) <= range);
+          const city = this.cities.find(c => c.owner !== owner && !this.unitAt(c.q, c.r) && distance(u, c) >= 1 && distance(u, c) <= range);
           if (city) { this.attackCity(u, city); continue; }
         }
         targets.sort((a, b) => distance(u, a) - distance(u, b));
@@ -619,9 +630,9 @@ export class Game {
     return { kind, id, name: def.name, cost: def.cost };
   }
 
-  // The strongest combat unit the AI can currently build (by attack).
-  _aiBestUnit() {
-    const researched = this.civs[1].research.researched;
+  // The strongest combat unit a civ can currently build (by attack).
+  _aiBestUnit(owner = 1) {
+    const researched = this.civs[owner].research.researched;
     let best = 'warrior', bestAtk = 0;
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
       if (!def.attack || def.canFound || def.domain === 'sea') continue; // AI builds land units

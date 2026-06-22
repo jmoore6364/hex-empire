@@ -3,7 +3,8 @@
 import * as THREE from 'three';
 import { key } from './hex.js';
 
-export const OWNER_COLOR = [0x3a78d0, 0xd04545]; // 0 = player, 1 = AI
+// 0 = player (blue); 1+ = AI civs (crimson, verdant, amber, violet).
+export const OWNER_COLOR = [0x3a78d0, 0xd04545, 0x39a86b, 0xd49a2e, 0x9b59b6];
 
 // Unit archetypes. `move` is movement points per turn; `sight` is fog reveal
 // radius; `cost` is production points to build one in a city; `range` (if > 1)

@@ -2,7 +2,7 @@
 
 A Civilization-like **3D hex-based 4X** strategy game, built with [Three.js](https://threejs.org/).
 Explore a procedurally generated continent, found cities, research a tech tree,
-build an economy, and fight an AI civ for the map.
+build an economy, and fight rival AI civilizations for the map.
 
 ### ▶ [Play it in your browser](https://jmoore6364.github.io/hex-empire/)
 
@@ -47,9 +47,9 @@ When a unit uses up its movement (or attacks), selection automatically advances
 to your next unit with moves left and the camera pans to it — so you can play a
 whole turn without hunting for idle units.
 
-**Win** by wiping out the Crimson AI (capture every enemy city) or by being the
-first to research **Flight**; **lose** if you're eliminated or the AI gets Flight
-first. To take a city, batter it with attacks until its defense hits 0, then move
+**Win** by wiping out every rival civilization (capture all their cities) or by
+being the first to research **Flight**; **lose** if you're eliminated or a rival
+gets Flight first. To take a city, batter it with attacks until its defense hits 0, then move
 a melee unit in to capture it — City Walls and a garrison make that much harder.
 
 Found a city, then click it to pick what to **build** (units, or buildings once
@@ -57,8 +57,8 @@ their tech is researched). Open the **🔬 Research** drawer to choose technolog
 click any tech — even a distant one like Flight — and the whole prerequisite path
 is queued automatically. Each turn your cities work the tiles inside their
 borders, grow, pour production into their queue, and bank science toward your
-research. Expand with new Settlers and out-develop the **Crimson** AI civ on the
-far side of the continent.
+research. Expand with new Settlers and out-develop the **rival AI
+civilizations** spread across the map — who also war with each other.
 
 ## What's implemented
 
@@ -97,9 +97,11 @@ far side of the continent.
 - **Save / load** — save your game to the browser (localStorage) and resume it
   any time; it also autosaves every turn, so a refresh + Load picks up where you
   left off. The map regenerates identically from its seed, so a save is tiny.
-- **AI economy & strategy** — the Crimson AI researches, queues production,
-  sends settlers out to expand, **rushes defenders or City Walls when its cities
-  are threatened**, sieges your cities, and **pulls wounded units back to heal**.
+- **Multiple AI civilizations** — several rival civs (Crimson, Verdant, …) start
+  spread across the map, each expanding, researching, and warring — against you
+  *and each other*. Each one researches, queues production, sends settlers out to
+  expand, **rushes defenders or City Walls when threatened**, sieges enemy cities,
+  and **pulls wounded units back to heal**.
 
 **Pass 3 — characters & depth** *(in progress)*
 
