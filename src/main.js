@@ -11,6 +11,7 @@ import { availableTechs } from './tech.js';
 import { BUILDINGS } from './buildings.js';
 import { Effects } from './effects.js';
 import { ResearchPanel } from './researchui.js';
+import { Sound } from './audio.js';
 
 const MAP_RADIUS = 26;
 const NUM_AI = 2;       // rival AI civilizations (plus the human player)
@@ -118,15 +119,24 @@ ui.refreshTopbar(game);
 ui.hideLoading();
 
 // Game-over overlay.
+let gameOverShown = false;
 function checkGameOver() {
-  if (!game.gameOver) return;
+  if (!game.gameOver || gameOverShown) return;
+  gameOverShown = true;
   const t = document.getElementById('go-title');
   t.textContent = game.gameOver.win ? '🏆 Victory!' : '💀 Defeat';
   t.style.color = game.gameOver.win ? '#7fd17f' : '#e88';
   document.getElementById('go-reason').textContent = game.gameOver.reason;
   document.getElementById('gameover').style.display = 'flex';
+  sound.play(game.gameOver.win ? 'victory' : 'defeat');
 }
 document.getElementById('go-new').addEventListener('click', () => location.reload());
+
+// Sound effects (synthesized; muteable).
+const sound = new Sound();
+const muteBtn = document.getElementById('mute-btn');
+muteBtn.textContent = sound.enabled ? '🔊' : '🔇';
+muteBtn.addEventListener('click', () => { sound.setEnabled(!sound.enabled); muteBtn.textContent = sound.enabled ? '🔊' : '🔇'; if (sound.enabled) sound.play('select'); });
 
 // Research drawer (its own pop-out panel, not in the city menu).
 const researchPanel = new ResearchPanel(game);
@@ -185,6 +195,7 @@ function selectUnit(u, focus = false) {
   if (focus) { const top = view.topOf(u.q, u.r); if (top) camRig.focus(top.x, top.z, top.y); }
   refreshUnitPanel();
   drawOverlays(null);
+  sound.play('select');
 }
 
 function deselect() {
@@ -270,7 +281,7 @@ function refreshUnitPanel() {
       label: 'Found City', enabled: selected.move > 0 && !game.cityAt(selected.q, selected.r),
       onClick: () => {
         const res = game.foundCity(selected);
-        if (res.ok) { ui.toast(`${res.city.name} founded!`, '#7fd17f'); game.income = game.computeIncome(); ui.refreshTopbar(game); selectCity(res.city); }
+        if (res.ok) { sound.play('city'); ui.toast(`${res.city.name} founded!`, '#7fd17f'); game.income = game.computeIncome(); ui.refreshTopbar(game); selectCity(res.city); }
         else ui.toast(res.msg, '#e88');
       },
     });
@@ -332,6 +343,7 @@ function handleClick(ev) {
     const res = game.tryMoveUnit(selected, q, r);
     if (res.ok) {
       if (res.combat) ui.toast(res.msg, '#ffb14a');
+      sound.play(res.combat ? 'attack' : 'move');
       ui.refreshTopbar(game);
       checkGameOver();
       // Keep directing this unit while it still has moves; otherwise advance to
@@ -367,6 +379,7 @@ function endTurn() {
   ui.refreshTopbar(game);
   const ev = game.events;
   ui.toast(ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`, ev.length ? '#7fd17f' : '#9fd0ff');
+  sound.play(ev.some(m => m.startsWith('Researched')) ? 'research' : ev.some(m => /trained|built/.test(m)) ? 'build' : 'turn');
   checkGameOver();
   // Keep a city panel open if you were managing one; otherwise start the turn on
   // your first ready unit.

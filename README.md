@@ -42,6 +42,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect / close drawer |
 | **💾 Save / 📂 Load** | Save the game to your browser and resume it later (it also autosaves each turn) |
+| **🔊** | Toggle sound effects |
 
 When a unit uses up its movement (or attacks), selection automatically advances
 to your next unit with moves left and the camera pans to it — so you can play a
@@ -94,6 +95,10 @@ civilizations** spread across the map — who also war with each other.
 - **City territory** — each city claims the hexes within radius 2 (nearest city
   wins contested tiles) and works the best of them by population. Owner-colored
   borders are drawn on the map.
+- **Sound effects** — selection, movement, combat, founding, building, research
+  and victory/defeat are all **synthesized with the Web Audio API** (no audio
+  files — it works offline and adds nothing to the download). Muteable; the
+  preference is remembered.
 - **Save / load** — save your game to the browser (localStorage) and resume it
   any time; it also autosaves every turn, so a refresh + Load picks up where you
   left off. The map regenerates identically from its seed, so a save is tiny.
@@ -157,6 +162,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/camera.js` | RTS camera rig |
 | `src/ui.js` | HUD / selection panel (plain DOM) |
 | `src/researchui.js` | Pop-out tech-tree drawer (era columns, connectors, path queuing) |
+| `src/audio.js` | Synthesized Web Audio sound effects |
 | `src/main.js` | Bootstrap: scene, lights, input, render loop |
 | `server.mjs` | Zero-dependency static server |
 | `test/logic.test.mjs` | Self-tests for the pure modules |
