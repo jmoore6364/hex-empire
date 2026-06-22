@@ -422,6 +422,17 @@ export class Game {
     this._processResearch(civ);
   }
 
+  // A unit that held position recovers HP — most inside a friendly city, some on
+  // owned territory, a little in the field, none while embarked at sea.
+  _heal(u) {
+    if (u.embarked || u.hp >= u.def.hp) return;
+    const k = key(u.q, u.r);
+    const inCity = this.cities.some(c => c.owner === u.owner && c.q === u.q && c.r === u.r);
+    const terr = this.ownership.get(k);
+    const amt = inCity ? 15 : (terr && terr.owner === u.owner) ? 10 : 5;
+    u.hp = Math.min(u.def.hp, u.hp + amt);
+  }
+
   // Decide the game once a civ is wiped out or someone reaches Flight.
   _checkGameOver() {
     if (this.gameOver) return;
@@ -442,7 +453,10 @@ export class Game {
     this.income = this.computeIncome(0);
 
     this.turn++;
-    for (const u of this.units) if (u.owner === 0) u.move = u.def.move;
+    for (const u of this.units) if (u.owner === 0) {
+      if (u.move === u.def.move) this._heal(u); // didn't act this turn — recover
+      u.move = u.def.move;
+    }
     this.recomputeOwnership();
     this.recomputeFog();
     this._checkGameOver();
@@ -453,7 +467,10 @@ export class Game {
   // buildings and military, and push units toward the player.
   _runAI() {
     const civ = this.civs[1];
-    for (const u of this.units) if (u.owner === 1) u.move = u.def.move;
+    for (const u of this.units) if (u.owner === 1) {
+      if (u.move === u.def.move) this._heal(u); // idle units recover
+      u.move = u.def.move;
+    }
 
     // Research: always be working on the cheapest available tech.
     if (!civ.research.queue.length) {
@@ -461,13 +478,19 @@ export class Game {
       if (opts.length) civ.research.queue = [opts[0]];
     }
 
-    // Production: decide what each idle AI city should build next.
+    // Production: defend threatened cities first, then expand, build, and arm.
     const aiCities = this.cities.filter(c => c.owner === 1);
     const aiSettlers = this.units.filter(u => u.owner === 1 && u.def.canFound).length;
     for (const c of aiCities) {
       if (c.queue.length) continue;
       const unlocked = unlockedBuildings(civ.research.researched).filter(id => !c.buildings.has(id));
-      if (aiCities.length < 3 && aiSettlers === 0) {
+      const threatened = this.units.some(e => e.owner === 0 && distance(e, c) <= 5);
+      const defended = this.units.some(u => u.owner === 1 && u.def.attack && !u.def.canFound && distance(u, c) <= 3);
+      if (threatened && !defended) {
+        // Rush walls if we can, otherwise the strongest defender available.
+        if (civ.research.researched.has('masonry') && !c.buildings.has('walls')) c.queue.push(this._aiItem('building', 'walls'));
+        else c.queue.push(this._aiItem('unit', this._aiBestUnit()));
+      } else if (aiCities.length < 3 && aiSettlers === 0) {
         c.queue.push(this._aiItem('unit', 'settler'));
       } else if (unlocked.length) {
         c.queue.push(this._aiItem('building', unlocked[0]));
@@ -482,6 +505,19 @@ export class Game {
         const tile = this.tiles.get(key(u.q, u.r));
         const crowded = this.cities.some(c => c.owner === 1 && distance(c, u) < 3);
         if (tile && tile.passable && !crowded && !this.cityAt(u.q, u.r)) { this.foundCity(u); continue; }
+      }
+
+      // Badly wounded units break off and fall back to the nearest city to heal.
+      if (u.def.attack && u.hp < u.def.hp * 0.4) {
+        const refuge = this.cities.filter(c => c.owner === 1).sort((a, b) => distance(u, a) - distance(u, b))[0];
+        if (refuge) {
+          const opts = this._moveOpts(u);
+          const reach = reachable(this.tiles, u, u.move, this.occupied(u), opts);
+          let pick = null, bestD = Infinity;
+          for (const k of reach.keys()) { const [q, r] = k.split(',').map(Number); const d = distance({ q, r }, refuge); if (d < bestD) { bestD = d; pick = k; } }
+          if (pick) { const [q, r] = pick.split(',').map(Number); const path = findPath(this.tiles, u, { q, r }, this.occupied(u), opts); if (path) u.enqueuePath(path, this.view); }
+          continue;
+        }
       }
 
       // Head toward the nearest visible player asset, else wander.

@@ -93,8 +93,9 @@ far side of the continent.
 - **City territory** — each city claims the hexes within radius 2 (nearest city
   wins contested tiles) and works the best of them by population. Owner-colored
   borders are drawn on the map.
-- **AI economy** — the Crimson AI researches, queues production, and sends
-  settlers out to found new cities instead of starting with a fixed roster.
+- **AI economy & strategy** — the Crimson AI researches, queues production,
+  sends settlers out to expand, **rushes defenders or City Walls when its cities
+  are threatened**, sieges your cities, and **pulls wounded units back to heal**.
 
 **Pass 3 — characters & depth** *(in progress)*
 
@@ -117,6 +118,9 @@ far side of the continent.
   water (they ride a little boat and are vulnerable at sea) and to build naval
   units in coastal cities: the **Galley**, and later the **Frigate**. Sail a
   Settler over to colonize the outer islands, or send a fleet to raid the coast.
+- **Healing & attrition** — a unit that holds position recovers HP (the most
+  inside a friendly city, some on owned land, none while embarked at sea), so
+  fights are wars of attrition rather than one-shots.
 - **City capture & victory** — cities have defense HP (boosted by population and
   City Walls) that regenerates between assaults. Wear a city down and march a
   melee unit in to capture it. Win by **domination** (eliminate the AI) or by
