@@ -7,6 +7,7 @@ import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
 import { computeOwnership, ownedTiles } from '../src/territory.js';
 import { cityYields } from '../src/economy.js';
+import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
 import { defenseMultiplier, resolveAttack } from '../src/combat.js';
 
@@ -210,6 +211,31 @@ check('ranged takes no counterattack', resolveAttack(6, 6, 'GRASSLAND', true).dm
 check('an unarmed defender never counters', resolveAttack(6, 0, 'GRASSLAND', false).dmgToAttacker === 0);
 check('extra defense (walls/city) reduces damage', resolveAttack(12, 0, 'GRASSLAND', true, 1.75).dmgToDefender < resolveAttack(12, 0, 'GRASSLAND', true, 1).dmgToDefender);
 check('extra defense stacks with terrain', resolveAttack(20, 0, 'HILLS', true, 1.75).dmgToDefender < resolveAttack(20, 0, 'HILLS', true, 1).dmgToDefender);
+
+// --- civics, governments, policies ---
+check('code_of_laws needs no prereqs', canCivic('code_of_laws', new Set()));
+check('craftsmanship is gated by code_of_laws',
+  !canCivic('craftsmanship', new Set()) && canCivic('craftsmanship', new Set(['code_of_laws'])));
+check('availableCivics is cheapest-first & only researchable', (() => {
+  const a = availableCivics(new Set(['code_of_laws']));
+  return a.includes('craftsmanship') && a.includes('military_tradition') && !a.includes('code_of_laws');
+})());
+check('civic pathTo pulls prerequisites in order', (() => {
+  const p = civicPath('feudalism', new Set());
+  return p[p.length - 1] === 'feudalism' && p.includes('code_of_laws');
+})());
+check('Chiefdom is always available', availableGovernments(new Set()).includes('chiefdom'));
+check('Autocracy needs Early Empire',
+  !availableGovernments(new Set()).includes('autocracy') && availableGovernments(new Set(['early_empire'])).includes('autocracy'));
+check('policies unlock with their civic', availablePolicies(new Set(['craftsmanship'])).includes('urban_planning'));
+check('no policies without civics', availablePolicies(new Set()).length === 0);
+
+// --- culture yield ---
+check('a city produces culture', cityYields({ yields: { food: 1, prod: 1, gold: 0 } }, [], 0, []).culture >= 1);
+check('a Monument adds flat culture', (() => {
+  const c = { yields: { food: 1, prod: 1, gold: 0 } };
+  return cityYields(c, [], 0, ['monument']).culture === cityYields(c, [], 0, []).culture + 2;
+})());
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

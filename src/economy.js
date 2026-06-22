@@ -2,7 +2,7 @@
 // best `population` tiles it owns, then buildings multiply the result. Pure
 // logic, NO rendering deps.
 
-import { applyBuildings } from './buildings.js';
+import { applyBuildings, BUILDINGS } from './buildings.js';
 
 const tileValue = (t) => t.yields.food + t.yields.prod + t.yields.gold;
 
@@ -16,7 +16,7 @@ export function cityYields(center, owned, population, buildings = []) {
   const ranked = owned.slice().sort((a, b) => tileValue(b) - tileValue(a));
   const worked = [center, ...ranked.slice(0, population)];
 
-  const y = { food: 0, prod: 0, gold: 0, science: 0 };
+  const y = { food: 0, prod: 0, gold: 0, science: 0, culture: 0 };
   for (const t of worked) {
     y.food += t.yields.food;
     y.prod += t.yields.prod;
@@ -26,14 +26,18 @@ export function cityYields(center, owned, population, buildings = []) {
   // feed their people and can build something (no infinite build times).
   y.food = Math.max(1, y.food);
   y.prod = Math.max(1, y.prod);
-  y.gold += 1;                     // city tax
-  y.science += 1 + population;     // research from population
+  y.gold += 1;                          // city tax
+  y.science += 1 + population;          // research from population
+  y.culture += 1 + Math.floor(population / 2); // culture from a thriving city
 
   const m = applyBuildings(y, buildings);
+  // Culture buildings add a flat amount (it isn't a worked-tile multiplier).
+  for (const id of buildings) m.culture += BUILDINGS[id]?.culture || 0;
   return {
     food: Math.round(m.food),
     prod: Math.round(m.prod),
     gold: Math.round(m.gold),
     science: Math.round(m.science),
+    culture: Math.round(m.culture),
   };
 }

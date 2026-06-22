@@ -23,6 +23,7 @@ export class UI {
     $('prod').textContent = '+' + game.income.prod;
     $('gold').textContent = Math.round(game.treasury.gold) + ' (+' + game.income.gold + ')';
     $('sci').textContent = Math.round(game.treasury.science) + ' (+' + game.income.science + ')';
+    $('cult').textContent = Math.round(game.treasury.culture) + ' (+' + game.income.culture + ')';
   }
 
   showUnit(unit, actions) {

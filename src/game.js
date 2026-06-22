@@ -11,6 +11,7 @@ import { computeOwnership, ownedTiles } from './territory.js';
 import { cityYields } from './economy.js';
 import { resolveAttack } from './combat.js';
 import { isWater } from './worldgen.js';
+import { CIVICS, GOVERNMENTS, POLICIES, availableCivics, availableGovernments, availablePolicies, pathTo as civicPathTo } from './civics.js';
 
 const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhollow', 'Saltspire', 'Ironford', 'Dawnvale'];
 // Civ display names by owner index (0 = the human player).
@@ -37,7 +38,14 @@ export class Game {
     // research "bank" that is spent when the current tech's cost is met.
     this.civs = [];
     for (let i = 0; i < numCivs; i++) {
-      this.civs.push({ owner: i, name: CIV_NAMES[i] || `Civ ${i}`, treasury: { gold: 0, science: 0 }, research: { researched: new Set(), queue: [] } });
+      this.civs.push({
+        owner: i, name: CIV_NAMES[i] || `Civ ${i}`,
+        treasury: { gold: 0, science: 0, culture: 0 },
+        research: { researched: new Set(), queue: [] },
+        civics: { researched: new Set(), queue: [] },
+        government: 'chiefdom',
+        policies: [],            // adopted policy-card ids
+      });
     }
     this.treasury = this.civs[0].treasury; // back-compat alias for the HUD
   }
@@ -197,7 +205,8 @@ export class Game {
     let extraDef = 1;
     if (city && city.owner === defender.owner) extraDef = city.buildings.has('walls') ? 1.75 : 1.25;
     if (defender.embarked) extraDef *= 0.5; // a unit caught at sea is very vulnerable
-    const res = resolveAttack(attacker.def.attack || 0, defender.def.attack || 0, dt ? dt.terrain : null, isRanged, extraDef);
+    const atk = (attacker.def.attack || 0) + this.civMods(attacker.owner).combat;
+    const res = resolveAttack(atk, defender.def.attack || 0, dt ? dt.terrain : null, isRanged, extraDef);
 
     // Cosmetic combat animation (skipped in headless/logic contexts).
     if (this.fx) {
@@ -236,7 +245,7 @@ export class Game {
     const d = distance(unit, city);
     if (d < 1 || d > range) return { ok: false, msg: 'Out of range' };
 
-    const dmg = Math.max(1, unit.def.attack);
+    const dmg = Math.max(1, unit.def.attack + this.civMods(unit.owner).combat);
     city.hp = Math.max(0, city.hp - dmg);
     unit.move = 0;
     if (this.fx) {
@@ -292,22 +301,60 @@ export class Game {
     else this.scene.remove(unit.mesh);
   }
 
+  // --- civics: governments & policies ---------------------------------------
+  // Aggregate a civ's active modifiers from its government plus adopted policies.
+  civMods(owner) {
+    const civ = this.civs[owner];
+    const mods = { foodMul: 1, prodMul: 1, goldMul: 1, sciMul: 1, combat: 0, settlerDiscount: 1, militaryDiscount: 1 };
+    const merge = (eff) => {
+      if (!eff) return;
+      for (const k in eff) {
+        if (k === 'combat') mods.combat += eff[k];
+        else if (k.endsWith('Mul') || k.endsWith('Discount')) mods[k] *= eff[k];
+        else mods[k] = eff[k];
+      }
+    };
+    merge(GOVERNMENTS[civ.government]?.bonus);
+    for (const id of civ.policies) merge(POLICIES[id]?.effect);
+    return mods;
+  }
+
   // --- economy --------------------------------------------------------------
-  // One city's per-turn yields, from the tiles it works plus its buildings.
+  // One city's per-turn yields: worked tiles + buildings, then civic modifiers.
   cityYields(city) {
     const center = this.tiles.get(key(city.q, city.r));
-    return cityYields(center, this.ownedTilesFor(city), city.population, city.buildings);
+    const y = cityYields(center, this.ownedTilesFor(city), city.population, city.buildings);
+    const m = this.civMods(city.owner);
+    return {
+      food: Math.round(y.food * m.foodMul),
+      prod: Math.round(y.prod * m.prodMul),
+      gold: Math.round(y.gold * m.goldMul),
+      science: Math.round(y.science * m.sciMul),
+      culture: y.culture,
+    };
   }
 
   // Aggregate yields for a civ (used by the HUD for the player).
   computeIncome(owner = 0) {
-    const inc = { food: 0, prod: 0, gold: 0, science: 0 };
+    const inc = { food: 0, prod: 0, gold: 0, science: 0, culture: 0 };
     for (const c of this.cities) {
       if (c.owner !== owner) continue;
       const y = this.cityYields(c);
-      inc.food += y.food; inc.prod += y.prod; inc.gold += y.gold; inc.science += y.science;
+      inc.food += y.food; inc.prod += y.prod; inc.gold += y.gold; inc.science += y.science; inc.culture += y.culture;
     }
     return inc;
+  }
+
+  // Effective production cost of a build item after civic discounts.
+  itemCost(owner, item) {
+    let mult = 1;
+    if (item.kind === 'unit') {
+      const m = this.civMods(owner);
+      const def = UNIT_TYPES[item.id];
+      if (def?.canFound) mult = m.settlerDiscount;
+      else if (def?.attack) mult = m.militaryDiscount;
+    }
+    return Math.max(1, Math.round(item.cost * mult));
   }
 
   // --- production queue -----------------------------------------------------
@@ -321,7 +368,7 @@ export class Game {
       if (def.requires && !researched.has(def.requires)) continue; // gated by tech
       items.push({ kind: 'unit', id, name: def.name, cost: def.cost, domain: def.domain });
     }
-    for (const id of unlockedBuildings(researched)) {
+    for (const id of unlockedBuildings(researched, civ.civics.researched)) {
       items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc });
     }
     return items;
@@ -373,9 +420,10 @@ export class Game {
     city.production += this.cityYields(city).prod;
     while (city.queue.length) {
       const item = city.queue[0];
-      if (city.production < item.cost) break;
+      const cost = this.itemCost(city.owner, item);
+      if (city.production < cost) break;
       if (item.kind === 'unit' && !this._spawnSpot(city, UNIT_TYPES[item.id])) break; // no room — wait
-      city.production -= item.cost;
+      city.production -= cost;
       city.queue.shift();
       this._completeBuild(city, item);
     }
@@ -405,6 +453,46 @@ export class Game {
     }
   }
 
+  // --- civics (mirror of research, paid with culture) -----------------------
+  setCivicPath(owner, target) {
+    const civ = this.civs[owner];
+    civ.civics.queue = civicPathTo(target, civ.civics.researched);
+    return civ.civics.queue;
+  }
+  currentCivic(owner) { return this.civs[owner].civics.queue[0] || null; }
+
+  setGovernment(owner, govId) {
+    if (availableGovernments(this.civs[owner].civics.researched).includes(govId)) this.civs[owner].government = govId;
+  }
+
+  // Adopt a set of policy cards, keeping only unlocked cards that fit the
+  // government's slots (military / economic / wildcard).
+  setPolicies(owner, cards) {
+    const civ = this.civs[owner];
+    const slots = GOVERNMENTS[civ.government].slots;
+    const unlocked = new Set(availablePolicies(civ.civics.researched));
+    const left = { mil: slots.mil, eco: slots.eco, wild: slots.wild };
+    const accepted = [];
+    for (const id of cards) {
+      const p = POLICIES[id];
+      if (!p || !unlocked.has(id) || accepted.includes(id)) continue;
+      if (left[p.slot] > 0) { left[p.slot]--; accepted.push(id); }
+      else if (left.wild > 0) { left.wild--; accepted.push(id); }
+    }
+    civ.policies = accepted;
+  }
+
+  _processCivics(civ) {
+    const c = civ.civics;
+    while (c.queue.length) {
+      const civic = CIVICS[c.queue[0]];
+      if (civ.treasury.culture < civic.cost) break;
+      civ.treasury.culture -= civic.cost;
+      c.researched.add(c.queue.shift());
+      if (civ.owner === 0) this.events.push(`Adopted ${civic.name} — unlocks ${civic.unlocks}`);
+    }
+  }
+
   // Run a civ's whole economy for one turn: growth, production, banking, research.
   _processEconomy(owner) {
     const civ = this.civs[owner];
@@ -419,8 +507,10 @@ export class Game {
       c.hp = Math.min(this.cityMaxHp(c), c.hp + 8); // walls heal between assaults
       civ.treasury.gold += y.gold;
       civ.treasury.science += y.science;
+      civ.treasury.culture += y.culture;
     }
     this._processResearch(civ);
+    this._processCivics(civ);
   }
 
   // A unit that held position recovers HP — most inside a friendly city, some on
@@ -447,7 +537,13 @@ export class Game {
       explored: [...this.explored],
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, queue: c.queue, buildings: [...c.buildings] })),
-      civs: this.civs.map(v => ({ treasury: { ...v.treasury }, research: { researched: [...v.research.researched], queue: [...v.research.queue] } })),
+      civs: this.civs.map(v => ({
+        treasury: { ...v.treasury },
+        research: { researched: [...v.research.researched], queue: [...v.research.queue] },
+        civics: { researched: [...v.civics.researched], queue: [...v.civics.queue] },
+        government: v.government,
+        policies: [...v.policies],
+      })),
       gameOver: this.gameOver,
     };
   }
@@ -477,9 +573,13 @@ export class Game {
     this.civs.forEach((v, i) => {
       const cd = data.civs[i];
       if (!cd) return;
-      v.treasury = { gold: cd.treasury.gold || 0, science: cd.treasury.science || 0 };
+      v.treasury = { gold: cd.treasury.gold || 0, science: cd.treasury.science || 0, culture: cd.treasury.culture || 0 };
       v.research.researched = new Set(cd.research.researched || []);
       v.research.queue = cd.research.queue || [];
+      v.civics.researched = new Set((cd.civics && cd.civics.researched) || []);
+      v.civics.queue = (cd.civics && cd.civics.queue) || [];
+      v.government = cd.government || 'chiefdom';
+      v.policies = cd.policies || [];
     });
     this.treasury = this.civs[0].treasury;
     this.gameOver = data.gameOver || null;
@@ -540,18 +640,26 @@ export class Game {
       u.move = u.def.move;
     }
 
-    // Research: always be working on the cheapest available tech.
+    // Research & civics: always work on the cheapest available of each.
     if (!civ.research.queue.length) {
       const opts = availableTechs(civ.research.researched);
       if (opts.length) civ.research.queue = [opts[0]];
     }
+    if (!civ.civics.queue.length) {
+      const opts = availableCivics(civ.civics.researched);
+      if (opts.length) civ.civics.queue = [opts[0]];
+    }
+    // Adopt the best available government and fill its policy slots.
+    const govs = availableGovernments(civ.civics.researched);
+    if (govs.length) civ.government = govs[govs.length - 1];
+    this.setPolicies(owner, availablePolicies(civ.civics.researched));
 
     // Production: defend threatened cities first, then expand, build, and arm.
     const myCities = this.cities.filter(c => c.owner === owner);
     const mySettlers = this.units.filter(u => u.owner === owner && u.def.canFound).length;
     for (const c of myCities) {
       if (c.queue.length) continue;
-      const unlocked = unlockedBuildings(civ.research.researched).filter(id => !c.buildings.has(id));
+      const unlocked = unlockedBuildings(civ.research.researched, civ.civics.researched).filter(id => !c.buildings.has(id));
       const threatened = this.units.some(e => e.owner !== owner && distance(e, c) <= 5);
       const defended = this.units.some(u => u.owner === owner && u.def.attack && !u.def.canFound && distance(u, c) <= 3);
       if (threatened && !defended) {

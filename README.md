@@ -39,6 +39,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | **Found City** button | Settle your Settler on its current tile |
 | Left-click your city | Open it: queue units/buildings |
 | **🔬 Research** button | Open the tech tree; click any tech to queue the path to it |
+| **📜 Civics** button | Open the civics tree; pick a government and slot policy cards |
 | `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect / close drawer |
 | **💾 Save / 📂 Load** | Save the game to your browser and resume it later (it also autosaves each turn) |
@@ -89,6 +90,13 @@ civilizations** spread across the map — who also war with each other.
   science is spent down a **research queue**: click any tech and the full
   prerequisite path is lined up; a toast and the drawer prompt you to pick the
   next when one completes. Early techs unlock the buildings below.
+- **Civics, governments & policies** — a second **Culture** yield feeds a
+  parallel **civics tree** (its own 📜 drawer, same path-queue UI). Civics unlock
+  culture buildings (Monument, Amphitheater), **governments** (Chiefdom →
+  Autocracy → Republic → Democracy, each with an inherent bonus and a set of
+  policy slots), and **policy cards** you slot into them for empire-wide bonuses
+  — +production, +gold, combat strength, cheaper settlers/military, faster
+  growth. Effects stack across your government and active policies.
 - **Buildings** — Granary/Aqueduct (+food), Workshop/Factory (+prod),
   Market/Bank (+gold), Library/University (+science) multiply their city's
   yields; City Walls fortify a garrison. Each is gated by its tech.
@@ -150,6 +158,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/worldgen.js` | Seeded Perlin terrain generation, terrain catalogue — *pure* |
 | `src/pathfinding.js` | A\* and movement-range flood fill — *pure* |
 | `src/tech.js` | Tech tree catalogue & research prerequisites — *pure* |
+| `src/civics.js` | Civics tree, governments & policy cards — *pure* |
 | `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
 | `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |
 | `src/economy.js` | Per-city yield calculation (worked tiles + buildings) — *pure* |

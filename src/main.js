@@ -7,10 +7,11 @@ import { WorldView } from './world.js';
 import { Game } from './game.js';
 import { CameraRig } from './camera.js';
 import { UI } from './ui.js';
-import { availableTechs } from './tech.js';
+import { TECHS, availableTechs, canResearch } from './tech.js';
+import { CIVICS, canResearch as canCivic, GOVERNMENTS, POLICIES, availableGovernments, availablePolicies } from './civics.js';
 import { BUILDINGS } from './buildings.js';
 import { Effects } from './effects.js';
-import { ResearchPanel } from './researchui.js';
+import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
 
 const MAP_RADIUS = 26;
@@ -138,10 +139,65 @@ const muteBtn = document.getElementById('mute-btn');
 muteBtn.textContent = sound.enabled ? '🔊' : '🔇';
 muteBtn.addEventListener('click', () => { sound.setEnabled(!sound.enabled); muteBtn.textContent = sound.enabled ? '🔊' : '🔇'; if (sound.enabled) sound.play('select'); });
 
-// Research drawer (its own pop-out panel, not in the city menu).
-const researchPanel = new ResearchPanel(game);
-researchPanel.onPick((id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); });
+// Research (science) and Civics (culture) tree drawers.
+const researchPanel = new TreePanel(game, {
+  ids: { drawer: 'research', tree: 'tech-tree', current: 'research-current', btn: 'research-btn', close: 'research-close' },
+  catalogue: TECHS, canPick: canResearch,
+  state: (g) => g.civs[0].research,
+  bank: (g) => Math.floor(g.treasury.science),
+  income: (g) => g.income.science,
+  glyph: '🔬', accent: '#6fd0e8', chooseLabel: 'No research selected',
+  onPick: (id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); },
+});
+const civicsPanel = new TreePanel(game, {
+  ids: { drawer: 'civics', tree: 'civics-tree', current: 'civics-current', btn: 'civics-btn', close: 'civics-close' },
+  catalogue: CIVICS, canPick: canCivic,
+  state: (g) => g.civs[0].civics,
+  bank: (g) => Math.floor(g.civs[0].treasury.culture),
+  income: (g) => g.income.culture,
+  glyph: '📜', accent: '#c792ea', chooseLabel: 'No civic selected',
+  onPick: (id) => { game.setCivicPath(0, id); civicsPanel.render(); ui.refreshTopbar(game); },
+  afterRender: renderGovPanel,
+});
 researchPanel.syncButton();
+civicsPanel.syncButton();
+// Only one drawer open at a time.
+document.getElementById('research-btn').addEventListener('click', () => civicsPanel.close());
+document.getElementById('civics-btn').addEventListener('click', () => researchPanel.close());
+
+// Government picker + policy-card slots, rendered into the Civics drawer.
+function renderGovPanel(g) {
+  const el = document.getElementById('civics-gov');
+  const civ = g.civs[0];
+  const researched = civ.civics.researched;
+  const slots = GOVERNMENTS[civ.government].slots;
+  let h = `<div class="label">Government</div><div class="gov-row">`;
+  for (const id of availableGovernments(researched)) {
+    h += `<button class="gov${civ.government === id ? ' active' : ''}" data-gov="${id}" title="${GOVERNMENTS[id].desc}">${GOVERNMENTS[id].name}</button>`;
+  }
+  h += `</div>`;
+  const slotStr = `⚔${slots.mil} 💰${slots.eco}${slots.wild ? ` ✷${slots.wild}` : ''}`;
+  h += `<div class="label">Policies — slots ${slotStr}</div><div class="gov-row">`;
+  const unlocked = availablePolicies(researched);
+  if (!unlocked.length) h += `<span style="opacity:.6">Research civics to unlock policy cards.</span>`;
+  for (const id of unlocked) {
+    const p = POLICIES[id];
+    const icon = p.slot === 'mil' ? '⚔' : '💰';
+    h += `<button class="pol${civ.policies.includes(id) ? ' active' : ''}" data-pol="${id}" title="${p.desc}">${icon} ${p.name}</button>`;
+  }
+  h += `</div>`;
+  el.innerHTML = h;
+  el.querySelectorAll('[data-gov]').forEach(b => b.addEventListener('click', () => {
+    g.setGovernment(0, b.dataset.gov); renderGovPanel(g); ui.refreshTopbar(g); civicsPanel.syncButton();
+  }));
+  el.querySelectorAll('[data-pol]').forEach(b => b.addEventListener('click', () => {
+    const id = b.dataset.pol;
+    const had = civ.policies.includes(id);
+    g.setPolicies(0, had ? civ.policies.filter(x => x !== id) : [...civ.policies, id]);
+    if (!had && !civ.policies.includes(id)) ui.toast('No free policy slot', '#e88');
+    renderGovPanel(g); ui.refreshTopbar(g);
+  }));
+}
 
 // --- save / load -------------------------------------------------------------
 const SAVE_KEY = 'hexempire-save';
@@ -248,7 +304,7 @@ function refreshCityPanel() {
   let producing = null;
   const queue = [];
   c.queue.forEach((it, i) => {
-    const turns = game.turnsFor(c, it.cost, i === 0);
+    const turns = game.turnsFor(c, game.itemCost(0, it), i === 0);
     if (i === 0) producing = { name: it.name, turns };
     else queue.push({ name: it.name, turns });
   });
@@ -267,7 +323,7 @@ function refreshCityPanel() {
   for (const item of game.buildOptions(0)) {
     if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
     if (item.domain === 'sea' && !coastal) continue; // ships need a coastal city
-    const turns = game.turnsFor(c, item.cost, false);
+    const turns = game.turnsFor(c, game.itemCost(0, item), false);
     actions.push({ label: `⚒ ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
   }
   actions.push({ label: 'Close', enabled: true, onClick: deselect });
@@ -389,10 +445,12 @@ function endTurn() {
     advanceWhenIdle(null); // wait out the AI's move/fight animations first
   }
 
-  // Research: keep the drawer/button current, and prompt for a new tech when the
-  // queue runs dry (just finished one, or you've never picked one).
+  // Research / civics: keep the drawers/buttons current; prompt for a new tech
+  // when the research queue runs dry.
   researchPanel.syncButton();
   if (researchPanel.isOpen) researchPanel.render();
+  civicsPanel.syncButton();
+  if (civicsPanel.isOpen) civicsPanel.render();
   const r0 = game.civs[0].research;
   const canPick = game.cities.some(c => c.owner === 0) && availableTechs(r0.researched).length > 0;
   if (!r0.queue.length && canPick) {
@@ -405,7 +463,7 @@ function endTurn() {
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') { if (researchPanel.isOpen) researchPanel.close(); else deselect(); }
+  if (e.code === 'Escape') { if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 
