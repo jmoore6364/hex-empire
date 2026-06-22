@@ -16,6 +16,7 @@ import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
 import { loadUnitModels } from './models.js';
 import { CIVILIZATIONS } from './civilizations.js';
+import { emblemSVG } from './emblems.js';
 
 const FOG_REF = 30; // fog/shadow frustum sized for the largest map; world radius is chosen in the menu
 
@@ -33,8 +34,7 @@ function chooseStartOptions() {
     CIVILIZATIONS.forEach((c, idx) => {
       const card = document.createElement('button');
       card.className = 'civ-card' + (idx === 0 ? ' sel' : '');
-      const hex = '#' + c.color.toString(16).padStart(6, '0');
-      card.innerHTML = `<span class="sw" style="background:${hex}"></span><b>${c.name}</b><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span><span class="trd">⚔ ${c.unique}</span>`;
+      card.innerHTML = `${emblemSVG(c.id, c.color, 40)}<b>${c.name}</b><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span><span class="trd">⚔ ${c.unique}</span>`;
       card.addEventListener('click', () => { chosen = c; cards.querySelectorAll('.civ-card').forEach(x => x.classList.remove('sel')); card.classList.add('sel'); });
       cards.appendChild(card);
     });
@@ -185,6 +185,7 @@ if (saveData) {
 game.income = game.computeIncome();
 game.recomputeFog();
 ui.refreshTopbar(game);
+document.getElementById('civemblem').innerHTML = emblemSVG(game.civs[0].id, OWNER_COLOR[0], 20);
 ui.hideLoading();
 
 // Game-over overlay.
@@ -247,7 +248,7 @@ function renderDiplomacy() {
   for (let o = 1; o < game.civs.length; o++) {
     if (!game.isCivAlive(o)) continue;
     const war = game.atWar(0, o);
-    h += `<div class="row"><span style="color:${ownerHex(o)}">${game.civs[o].name}</span>` +
+    h += `<div class="row"><span>${emblemSVG(game.civs[o].id, OWNER_COLOR[o], 18)}<span style="color:${ownerHex(o)}">${game.civs[o].name}</span></span>` +
       `<span>${war ? '⚔ War' : '🕊 Peace'}<button class="act" data-civ="${o}">${war ? 'Make Peace' : 'Declare War'}</button></span></div>`;
   }
   document.getElementById('diplo-body').innerHTML = h || '<div class="row"><span>No rivals remain.</span></div>';

@@ -72,7 +72,9 @@ civilizations** spread across the map — who also war with each other.
   Warmongers +3 combat, Cultivators +15% food, Merchants +25% gold, Scholars
   +25% science, Industrious +15% production) **and a unique unit only that civ can
   build** (Azure Longship, Crimson Berserker, Verdant Ranger, Amber Mercenary,
-  Violet Arbalest, Onyx Bombard), plus **settings**: map size
+  Violet Arbalest, Onyx Bombard) and a procedural **heraldic crest** (an SVG
+  shield with a trait symbol — waves, crossed swords, leaf, coin, star, cog) shown
+  on its card, in the HUD and in the diplomacy panel, plus **settings**: map size
   (Small/Medium/Large), number of AI opponents (1–4), **difficulty**
   (Easy/Normal/Hard — scales AI income & combat), an optional **turn limit**
   (Off/150/250 → score victory), and sound on/off. Your chosen civ sets your
