@@ -119,9 +119,17 @@ civilizations** spread across the map — who also war with each other.
   policy slots), and **policy cards** you slot into them for empire-wide bonuses
   — +production, +gold, combat strength, cheaper settlers/military, faster
   growth. Effects stack across your government and active policies.
+- **Districts** — Civ-style districts you **place on a chosen owned tile**, each
+  grouping a category of buildings: the **Campus** (Library, University), the
+  **Commercial Hub** (Market, Bank), the **Industrial Zone** (Workshop, Factory)
+  and the **Theater Square** (Monument, Amphitheater). A building can only be
+  built once its district exists in that city, and each district adds a small flat
+  yield; pick the **Build → 🏛 District**, then click one of the highlighted
+  tiles to site it. The AI builds districts too.
 - **Buildings** — Granary/Aqueduct (+food), Workshop/Factory (+prod),
   Market/Bank (+gold), Library/University (+science) multiply their city's
-  yields; City Walls fortify a garrison. Each is gated by its tech.
+  yields; City Walls fortify a garrison. Each is gated by its tech (and, where it
+  belongs to one, by its district).
 - **City territory & expanding borders** — a city starts with the **six tiles
   around it** and then claims **one new tile at a time** as it banks culture,
   automatically steering toward the best unclaimed frontier tile — **resources and
@@ -199,6 +207,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/worldgen.js` | Seeded Perlin terrain generation, terrain catalogue — *pure* |
 | `src/pathfinding.js` | A\* and movement-range flood fill — *pure* |
 | `src/tech.js` | Tech tree catalogue & research prerequisites — *pure* |
+| `src/districts.js` | District types & their building groupings — *pure* |
 | `src/civics.js` | Civics tree, governments & policy cards — *pure* |
 | `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
 | `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |

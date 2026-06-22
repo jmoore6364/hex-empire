@@ -7,6 +7,7 @@ import { findPath, reachable } from './pathfinding.js';
 import { Unit, City, UNIT_TYPES, OWNER_COLOR } from './units.js';
 import { TECHS, availableTechs, pathTo } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
+import { DISTRICTS, DISTRICT_COST, buildingDistrict, unlockedDistricts } from './districts.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from './territory.js';
 import { cityYields } from './economy.js';
 import { resolveAttack } from './combat.js';
@@ -101,6 +102,7 @@ export class Game {
     this.view.applyFog(this.visible, this.explored);
     this._updateMeshVisibility();
     this.updateBorders();
+    this.updateDistricts();
   }
 
   // Enemy units/cities are only shown when inside the player's current sight.
@@ -142,6 +144,19 @@ export class Game {
       entries.push({ q, r, owner: city.owner, color: OWNER_COLOR[city.owner], center: (city.q === q && city.r === r) });
     }
     this.view.showBorders(entries);
+  }
+
+  // Feed the renderer a marker per placed district (hiding unexplored ones).
+  updateDistricts() {
+    const entries = [];
+    for (const c of this.cities) {
+      for (const [k, id] of c.districts) {
+        if (c.owner !== 0 && !this.explored.has(k)) continue;
+        const [q, r] = k.split(',').map(Number);
+        entries.push({ q, r, district: id, color: DISTRICTS[id].color });
+      }
+    }
+    if (this.view.showDistricts) this.view.showDistricts(entries);
   }
 
   // --- player actions -------------------------------------------------------
@@ -407,13 +422,18 @@ export class Game {
     const center = this.tiles.get(key(city.q, city.r));
     const y = cityYields(center, this.ownedTilesFor(city), city.population, city.buildings);
     const m = this.civMods(city.owner);
-    return {
+    const out = {
       food: Math.round(y.food * m.foodMul),
       prod: Math.round(y.prod * m.prodMul),
       gold: Math.round(y.gold * m.goldMul),
       science: Math.round(y.science * m.sciMul),
       culture: y.culture,
     };
+    for (const id of city.districts.values()) { // flat district yields
+      const dy = DISTRICTS[id]?.yield;
+      if (dy) for (const k in dy) out[k] = (out[k] || 0) + dy[k];
+    }
+    return out;
   }
 
   // Aggregate yields for a civ (used by the HUD for the player).
@@ -442,19 +462,38 @@ export class Game {
   // --- production queue -----------------------------------------------------
   // Build items a civ may queue right now: every unit, plus tech-unlocked
   // buildings. Per-city filtering (already built / queued) happens in the UI.
-  buildOptions(owner) {
+  buildOptions(owner, city = null) {
     const civ = this.civs[owner];
     const researched = civ.research.researched;
+    const has = city ? new Set(city.districts.values()) : null; // district types this city has
     const items = [];
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
       if (def.requires && !researched.has(def.requires)) continue;        // gated by tech
       if (def.onlyCiv && def.onlyCiv !== civ.id) continue;                // another civ's unique
       items.push({ kind: 'unit', id, name: def.name, cost: def.cost, domain: def.domain });
     }
+    for (const id of unlockedDistricts(researched, civ.civics.researched)) {
+      if (has && has.has(id)) continue; // one of each district per city
+      items.push({ kind: 'district', id, name: DISTRICTS[id].name, cost: DISTRICT_COST, desc: `Holds ${DISTRICTS[id].buildings.map(b => BUILDINGS[b].name).join(' & ')}` });
+    }
     for (const id of unlockedBuildings(researched, civ.civics.researched)) {
-      items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc });
+      const dist = buildingDistrict(id);
+      if (dist && has && !has.has(dist)) continue; // its district isn't built in this city yet
+      items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc, district: dist });
     }
     return items;
+  }
+
+  // Owned tiles where a new district may be placed (not the centre, on land, and
+  // not already holding a district or queued for one).
+  districtSites(city) {
+    const center = key(city.q, city.r);
+    const queued = new Set(city.queue.filter(i => i.kind === 'district' && i.tile).map(i => i.tile));
+    return [...city.tiles].filter(k => {
+      if (k === center || city.districts.has(k) || queued.has(k)) return false;
+      const t = this.tiles.get(k);
+      return t && t.passable && t.terrain !== 'MOUNTAIN';
+    });
   }
 
   enqueue(city, item) { city.queue.push({ ...item }); }
@@ -488,7 +527,10 @@ export class Game {
   }
 
   _completeBuild(city, item) {
-    if (item.kind === 'building') {
+    if (item.kind === 'district') {
+      if (item.tile && city.tiles.has(item.tile)) city.districts.set(item.tile, item.id);
+      if (city.owner === 0) this.events.push(`${DISTRICTS[item.id].name} built in ${city.name}`);
+    } else if (item.kind === 'building') {
       city.buildings.add(item.id);
       if (city.owner === 0) this.events.push(`${BUILDINGS[item.id].name} built in ${city.name}`);
     } else {
@@ -635,7 +677,7 @@ export class Game {
       cityNameIdx: this.cityNameIdx,
       explored: [...this.explored],
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
-      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
+      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
         name: v.name, id: v.id, trait: v.trait, color: OWNER_COLOR[i],
         treasury: { ...v.treasury },
@@ -669,6 +711,7 @@ export class Game {
       city.population = cd.population; city.food = cd.food; city.production = cd.production;
       city.hp = cd.hp; city.queue = cd.queue || []; city.buildings = new Set(cd.buildings || []);
       city.tiles = cd.tiles ? new Set(cd.tiles) : initialClaim(city, this.tiles, new Map());
+      city.districts = new Map(cd.districts || []);
       city.borderProgress = cd.borderProgress || 0;
       city.placeAt(this.view);
       this.scene.add(city.mesh);
@@ -796,7 +839,9 @@ export class Game {
     const mySettlers = this.units.filter(u => u.owner === owner && u.def.canFound).length;
     for (const c of myCities) {
       if (c.queue.length) continue;
-      const unlocked = unlockedBuildings(civ.research.researched, civ.civics.researched).filter(id => !c.buildings.has(id));
+      const opts = this.buildOptions(owner, c);
+      const building = opts.find(o => o.kind === 'building' && !c.buildings.has(o.id));
+      const district = opts.find(o => o.kind === 'district');
       const threatened = this.units.some(e => e.owner !== owner && distance(e, c) <= 5);
       const defended = this.units.some(u => u.owner === owner && u.def.attack && !u.def.canFound && distance(u, c) <= 3);
       if (threatened && !defended) {
@@ -804,8 +849,10 @@ export class Game {
         else c.queue.push(this._aiItem('unit', this._aiBestUnit(owner)));
       } else if (myCities.length < 3 && mySettlers === 0) {
         c.queue.push(this._aiItem('unit', 'settler'));
-      } else if (unlocked.length) {
-        c.queue.push(this._aiItem('building', unlocked[0]));
+      } else if (building) {
+        c.queue.push(this._aiItem('building', building.id));
+      } else if (district && this.districtSites(c).length) {
+        c.queue.push({ kind: 'district', id: district.id, name: district.name, cost: district.cost, tile: this.districtSites(c)[0] });
       } else {
         c.queue.push(this._aiItem('unit', this._aiBestUnit(owner)));
       }

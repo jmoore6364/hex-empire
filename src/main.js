@@ -10,6 +10,7 @@ import { UI } from './ui.js';
 import { TECHS, availableTechs, canResearch } from './tech.js';
 import { CIVICS, canResearch as canCivic, GOVERNMENTS, POLICIES, availableGovernments, availablePolicies } from './civics.js';
 import { BUILDINGS } from './buildings.js';
+import { DISTRICTS } from './districts.js';
 import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
 import { TreePanel } from './researchui.js';
@@ -328,6 +329,7 @@ const ndc = new THREE.Vector2();
 let selected = null;
 let selectedCity = null;
 let reachMap = new Map();
+let placing = null; // { city, item } while choosing a tile for a district
 
 // Deferred "advance to next unit": set when a unit finishes acting, then carried
 // out by the render loop once movement and combat animations have settled, so
@@ -421,17 +423,36 @@ function refreshCityPanel() {
     buildings: [...c.buildings].map(id => BUILDINGS[id].name),
   };
 
+  model.districts = [...c.districts.values()].map(id => `${DISTRICTS[id].glyph} ${DISTRICTS[id].name}`);
+
   const actions = [];
   const coastal = game.isCoastal(c);
   const queuedBuildings = new Set(c.queue.filter(i => i.kind === 'building').map(i => i.id));
-  for (const item of game.buildOptions(0)) {
+  const queuedDistricts = new Set(c.queue.filter(i => i.kind === 'district').map(i => i.id));
+  for (const item of game.buildOptions(0, c)) {
     if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
+    if (item.kind === 'district' && queuedDistricts.has(item.id)) continue;
     if (item.domain === 'sea' && !coastal) continue; // ships need a coastal city
     const turns = game.turnsFor(c, game.itemCost(0, item), false);
-    actions.push({ label: `⚒ ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
+    if (item.kind === 'district') {
+      const sites = game.districtSites(c).length;
+      actions.push({ label: `🏛 ${item.name} (${turns}t)`, enabled: sites > 0, onClick: () => beginPlaceDistrict(c, item) });
+    } else {
+      actions.push({ label: `${item.kind === 'building' ? '🏗' : '⚒'} ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
+    }
   }
   actions.push({ label: 'Close', enabled: true, onClick: deselect });
   ui.showCity(model, actions);
+}
+
+// Enter district-placement mode: highlight the city's valid sites; the next tile
+// click (in handleClick) drops the district there.
+function beginPlaceDistrict(city, item) {
+  placing = { city, item };
+  const sites = game.districtSites(city);
+  view.clearHighlights();
+  view.showReachable(new Map(sites.map(k => [k, true])));
+  ui.toast(`Pick a tile for the ${item.name} (Esc to cancel)`, '#9fd0ff');
 }
 
 function refreshUnitPanel() {
@@ -484,6 +505,23 @@ function handleClick(ev) {
   const tile = tileUnderPointer(ev);
   if (!tile) return;
   const { q, r } = tile;
+
+  // Placing a district: the click chooses its tile.
+  if (placing) {
+    const k = key(q, r);
+    const { city, item } = placing;
+    if (game.districtSites(city).includes(k)) {
+      game.enqueue(city, { ...item, tile: k });
+      placing = null;
+      view.clearHighlights();
+      ui.toast(`${item.name} sited — now building`, '#7fd17f');
+      sound.play('build');
+      selectCity(city); // refresh the panel
+    } else {
+      ui.toast('Pick a highlighted tile', '#e88');
+    }
+    return;
+  }
 
   const unitHere = game.unitAt(q, r);
   if (unitHere && unitHere.owner === 0 && unitHere !== selected && !unitHere.isMoving) {
@@ -569,7 +607,7 @@ function endTurn() {
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') { if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else if (diploPanel.style.display !== 'none') diploPanel.style.display = 'none'; else deselect(); }
+  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else if (diploPanel.style.display !== 'none') diploPanel.style.display = 'none'; else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 

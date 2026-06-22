@@ -6,6 +6,7 @@ import { findPath, reachable } from '../src/pathfinding.js';
 import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/territory.js';
+import { DISTRICTS, buildingDistrict, unlockedDistricts } from '../src/districts.js';
 import { cityYields } from '../src/economy.js';
 import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
@@ -143,6 +144,16 @@ check('applyBuildings multiplies the right yield', (() => {
   return out.food === 5 && out.prod === 2; // +25% food only
 })());
 check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']).food === 4);
+
+// --- districts ---
+{
+  check('Bank and Market share the Commercial Hub', buildingDistrict('bank') === 'commercial' && buildingDistrict('market') === 'commercial');
+  check('Library and University share the Campus', buildingDistrict('library') === 'campus' && buildingDistrict('university') === 'campus');
+  check('Walls is a city-centre building (no district)', buildingDistrict('walls') === null);
+  check('districts unlock by tech', unlockedDistricts(new Set(['currency'])).includes('commercial'));
+  check('locked districts stay hidden', !unlockedDistricts(new Set()).includes('campus'));
+  check('every district lists at least one building', Object.values(DISTRICTS).every(d => d.buildings.length > 0));
+}
 
 // --- territory ownership ---
 {

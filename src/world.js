@@ -361,4 +361,36 @@ export class WorldView {
     }
     for (; ei < this.edgePool.length; ei++) this.edgePool[ei].visible = false;
   }
+
+  // A small coloured building marker on each placed district tile.
+  showDistricts(entries) {
+    if (!this.districtGroup) {
+      this.districtGroup = new THREE.Group();
+      this.scene.add(this.districtGroup);
+      this.districtPool = [];
+      this.districtGeo = new THREE.BoxGeometry(0.5, 0.42, 0.5);
+      this.districtRoof = new THREE.BoxGeometry(0.58, 0.1, 0.58);
+    }
+    let i = 0;
+    for (const e of entries) {
+      const top = this.topOf(e.q, e.r);
+      if (!top) continue;
+      let m = this.districtPool[i];
+      if (!m) {
+        m = new THREE.Mesh(this.districtGeo, new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6 }));
+        const roof = new THREE.Mesh(this.districtRoof, new THREE.MeshStandardMaterial({ flatShading: true, roughness: 0.6 }));
+        roof.position.y = 0.26; m.add(roof); m.roof = roof;
+        m.castShadow = true;
+        this.districtGroup.add(m);
+        this.districtPool.push(m);
+      }
+      m.material.color.setHex(e.color);
+      m.material.emissive.setHex(e.color); m.material.emissiveIntensity = 0.25;
+      m.roof.material.color.setHex(0x1a2230);
+      m.position.set(top.x, top.y + 0.21, top.z);
+      m.visible = true;
+      i++;
+    }
+    for (; i < this.districtPool.length; i++) this.districtPool[i].visible = false;
+  }
 }
