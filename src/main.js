@@ -37,21 +37,36 @@ renderer.setSize(vpW(), vpH());
 renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
+renderer.toneMapping = THREE.ACESFilmicToneMapping; // richer contrast & colour
+renderer.toneMappingExposure = 1.08;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
-scene.background = new THREE.Color(0x0a0e14);
-// Atmospheric fade scales with the map so the board stays visible when zoomed out.
-scene.fog = new THREE.Fog(0x0a0e14, MAP_RADIUS * 2.5, MAP_RADIUS * 8);
+// A soft vertical gradient sky reads much nicer than a flat fill.
+function gradientSky() {
+  const c = document.createElement('canvas');
+  c.width = 2; c.height = 256;
+  const ctx = c.getContext('2d');
+  const g = ctx.createLinearGradient(0, 0, 0, 256);
+  g.addColorStop(0, '#0b1626'); g.addColorStop(0.55, '#1a2c44'); g.addColorStop(1, '#2c4a6b');
+  ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 256);
+  const tex = new THREE.CanvasTexture(c);
+  tex.colorSpace = THREE.SRGBColorSpace;
+  return tex;
+}
+scene.background = gradientSky();
+// Atmospheric fade scales with the map; tinted to the horizon so it blends in.
+scene.fog = new THREE.Fog(0x1a2c44, MAP_RADIUS * 2.8, MAP_RADIUS * 8.5);
 
 const camera = new THREE.PerspectiveCamera(55, vpW() / vpH(), 0.1, 300);
 
-const hemi = new THREE.HemisphereLight(0xcfe6ff, 0x35302a, 0.9);
+const hemi = new THREE.HemisphereLight(0xdcecff, 0x3a3024, 0.75);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff2e0, 1.1);
-sun.position.set(18, 30, 12);
+const sun = new THREE.DirectionalLight(0xfff0d8, 1.55);
+sun.position.set(20, 32, 14);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
+sun.shadow.bias = -0.0004;
 // Shadow frustum scales with the map so the whole board casts shadows.
 const SHADOW = MAP_RADIUS * 2.4;
 sun.shadow.camera.left = -SHADOW; sun.shadow.camera.right = SHADOW;

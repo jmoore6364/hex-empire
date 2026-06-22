@@ -7,6 +7,9 @@ import { RESOURCES } from './resources.js';
 
 const UNEXPLORED = new THREE.Color(0x0c1018);
 
+// Stable per-tile pseudo-random in [0,1), so each hex gets its own subtle shade.
+function hash2(q, r) { const s = Math.sin(q * 127.1 + r * 311.7) * 43758.5453; return s - Math.floor(s); }
+
 function tileHeight(tile) {
   if (!tile.passable && tile.terrain !== 'MOUNTAIN') return 0.45; // water sits low & flat
   return 0.45 + tile.elevation * 4.2;
@@ -46,7 +49,11 @@ export class WorldView {
       const { x, z } = hexToWorld(tile.q, tile.r);
       pos.set(x, h / 2, z); scl.set(1, h, 1);
       this.tileMesh.setMatrixAt(i, m.compose(pos, quat, scl));
+      // Subtle per-tile variation in hue/saturation/lightness (plus a touch by
+      // elevation) so blocks of the same terrain read as natural, not flat.
       const base = new THREE.Color(def.color);
+      const h1 = hash2(tile.q, tile.r), h2 = hash2(tile.r * 1.3, tile.q * 1.7);
+      base.offsetHSL((h1 - 0.5) * 0.025, (h2 - 0.5) * 0.07, (h1 - 0.5) * 0.10 + (tile.elevation - 0.45) * 0.06);
       this.tileMesh.setColorAt(i, base);
       const k = key(tile.q, tile.r);
       this.instanceTiles[i] = tile;

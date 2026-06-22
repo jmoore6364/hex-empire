@@ -70,7 +70,9 @@ civilizations** spread across the map — who also war with each other.
 - **3D hex map** — a large procedurally generated **archipelago**: a main
   continent ringed by ocean, scattered islands, and enclosed inland lakes, across
   every terrain type (plains, grassland, forest, desert, tundra, snow, hills,
-  mountains). Rendered as a single InstancedMesh so even ~2000 tiles stay cheap.
+  mountains). Per-tile colour variation, ACES tone mapping, a gradient sky and
+  soft sun shadows give it depth. Rendered as a single InstancedMesh so even
+  ~2000 tiles stay cheap.
   Deterministic per random seed each load; both civs start on the main landmass,
   and the outer islands are reachable once you research Sailing.
 - **RTS camera** — pan / zoom / rotate / orbit.
