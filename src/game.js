@@ -104,7 +104,7 @@ export class Game {
 
   // --- territory ------------------------------------------------------------
   recomputeOwnership() {
-    this.ownership = computeOwnership(this.cities, this.tiles, 2);
+    this.ownership = computeOwnership(this.cities, this.tiles, (c) => c.borderRadius || 2);
   }
 
   // Owned (non-center) tile objects for a city.
@@ -116,7 +116,7 @@ export class Game {
     for (const [k, city] of this.ownership) {
       if (city.owner !== 0 && !this.explored.has(k)) continue;
       const [q, r] = k.split(',').map(Number);
-      entries.push({ q, r, color: OWNER_COLOR[city.owner], center: (city.q === q && city.r === r) });
+      entries.push({ q, r, owner: city.owner, color: OWNER_COLOR[city.owner], center: (city.q === q && city.r === r) });
     }
     this.view.showBorders(entries);
   }
@@ -560,6 +560,13 @@ export class Game {
       c.food += y.food;
       const need = c.population * 10;
       if (c.food >= need) { c.food -= need; c.population++; }
+      // Territory expands as the city banks culture (Civ-style border growth).
+      const rad = c.borderRadius || 2;
+      if (rad < 4) {
+        c.borderProgress = (c.borderProgress || 0) + 1 + Math.floor(c.population / 2);
+        const cost = 8 * (rad - 1);
+        if (c.borderProgress >= cost) { c.borderProgress -= cost; c.borderRadius = rad + 1; if (owner === 0) this.events.push(`${c.name}'s borders expanded`); }
+      }
       this._processProduction(c);
       c.hp = Math.min(this.cityMaxHp(c), c.hp + 8); // walls heal between assaults
       civ.treasury.gold += y.gold;
@@ -593,7 +600,7 @@ export class Game {
       cityNameIdx: this.cityNameIdx,
       explored: [...this.explored],
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
-      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, queue: c.queue, buildings: [...c.buildings] })),
+      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, borderRadius: c.borderRadius, borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
         name: v.name, trait: v.trait, color: OWNER_COLOR[i],
         treasury: { ...v.treasury },
@@ -624,6 +631,7 @@ export class Game {
       const city = new City(cd.owner, cd.q, cd.r, cd.name);
       city.population = cd.population; city.food = cd.food; city.production = cd.production;
       city.hp = cd.hp; city.queue = cd.queue || []; city.buildings = new Set(cd.buildings || []);
+      city.borderRadius = cd.borderRadius || 2; city.borderProgress = cd.borderProgress || 0;
       city.placeAt(this.view);
       this.scene.add(city.mesh);
       this.cities.push(city);

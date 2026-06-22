@@ -7,11 +7,14 @@ import { key, distance, hexesInRange } from './hex.js';
 // Returns Map<"q,r", city> assigning every claimable tile to exactly one city,
 // so two cities never work the same hex. `tiles` is the world tile Map; only
 // keys present in it are claimed.
+// `radius` may be a number (same for every city) or a function (city) => number,
+// so a city's claim can grow as it accumulates culture.
 export function computeOwnership(cities, tiles, radius = 2) {
   const owner = new Map();
   const bestDist = new Map();
   for (const c of cities) {
-    for (const h of hexesInRange(c.q, c.r, radius)) {
+    const rad = typeof radius === 'function' ? radius(c) : radius;
+    for (const h of hexesInRange(c.q, c.r, rad)) {
       const k = key(h.q, h.r);
       if (!tiles.has(k)) continue;
       const d = distance(c, h);

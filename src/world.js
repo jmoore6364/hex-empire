@@ -1,7 +1,7 @@
 // world.js — turns generated tile data into 3D hex-prism meshes, and owns the
 // visual state that lives on the map: fog of war and highlight overlays.
 import * as THREE from 'three';
-import { HEX_SIZE, hexToWorld, key } from './hex.js';
+import { HEX_SIZE, hexToWorld, key, DIRECTIONS } from './hex.js';
 import { TERRAIN } from './worldgen.js';
 import { RESOURCES } from './resources.js';
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js';
@@ -306,24 +306,59 @@ export class WorldView {
     if (!this.borderGroup) {
       this.borderGroup = new THREE.Group();
       this.scene.add(this.borderGroup);
-      this.borderPool = [];
+      this.fillPool = [];
+      this.edgePool = [];
+      this.edgeGeo = new THREE.BoxGeometry(1, 0.06, 0.14); // unit strip along X
     }
-    let i = 0;
+    const ownerByKey = new Map();
+    for (const e of entries) ownerByKey.set(key(e.q, e.r), e.owner);
+
+    // Faint owner-coloured wash so claimed land reads at a glance.
+    let fi = 0;
     for (const e of entries) {
       const top = this.topOf(e.q, e.r);
       if (!top) continue;
-      let m = this.borderPool[i];
-      if (!m) {
-        m = new THREE.Mesh(this.flatGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false }));
-        this.borderGroup.add(m);
-        this.borderPool.push(m);
-      }
+      let m = this.fillPool[fi];
+      if (!m) { m = new THREE.Mesh(this.flatGeo, new THREE.MeshBasicMaterial({ transparent: true, depthWrite: false })); this.borderGroup.add(m); this.fillPool.push(m); }
       m.material.color.setHex(e.color);
-      m.material.opacity = e.center ? 0.32 : 0.13;
+      m.material.opacity = e.center ? 0.30 : 0.12;
       m.position.set(top.x, top.y + 0.04, top.z);
       m.visible = true;
-      i++;
+      fi++;
     }
-    for (; i < this.borderPool.length; i++) this.borderPool[i].visible = false;
+    for (; fi < this.fillPool.length; fi++) this.fillPool[fi].visible = false;
+
+    // Crisp owner-coloured edge on every boundary with another (or no) owner,
+    // inset slightly so neighbouring civs' borders sit side by side.
+    const R = HEX_SIZE, INSET = 0.16;
+    let ei = 0;
+    for (const e of entries) {
+      const top = this.topOf(e.q, e.r);
+      if (!top) continue;
+      for (const d of DIRECTIONS) {
+        if (ownerByKey.get(key(e.q + d.q, e.r + d.r)) === e.owner) continue; // internal edge
+        const nb = hexToWorld(e.q + d.q, e.r + d.r);
+        const corners = [];
+        for (let c = 0; c < 6; c++) {
+          const a = (Math.PI / 180) * (30 + 60 * c);
+          const cx = top.x + R * Math.cos(a), cz = top.z + R * Math.sin(a);
+          corners.push({ cx, cz, d2: (cx - nb.x) ** 2 + (cz - nb.z) ** 2 });
+        }
+        corners.sort((p, q) => p.d2 - q.d2);
+        const c1 = corners[0], c2 = corners[1];
+        let mx = (c1.cx + c2.cx) / 2, mz = (c1.cz + c2.cz) / 2;
+        mx += (top.x - mx) * INSET; mz += (top.z - mz) * INSET;
+        const len = Math.hypot(c2.cx - c1.cx, c2.cz - c1.cz);
+        let m = this.edgePool[ei];
+        if (!m) { m = new THREE.Mesh(this.edgeGeo, new THREE.MeshBasicMaterial({})); this.borderGroup.add(m); this.edgePool.push(m); }
+        m.material.color.setHex(e.color);
+        m.position.set(mx, top.y + 0.07, mz);
+        m.rotation.y = -Math.atan2(c2.cz - c1.cz, c2.cx - c1.cx);
+        m.scale.set(len * (1 - INSET * 0.5), 1, 1);
+        m.visible = true;
+        ei++;
+      }
+    }
+    for (; ei < this.edgePool.length; ei++) this.edgePool[ei].visible = false;
   }
 }
