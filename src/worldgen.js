@@ -136,8 +136,55 @@ export function generateWorld(radius = 12, seed = 1337) {
     });
   }
   classifyLakes(tiles);
+  const rivers = placeRivers(tiles, seed);
   placeResources(tiles, seed);
-  return { tiles, radius, seed };
+  return { tiles, radius, seed, rivers };
+}
+
+// Trace rivers downhill from high land to the sea/a lake. Each river is a chain
+// of land tiles; a river tile gains +1 food and +1 gold (fresh water & trade)
+// and costs +1 to ford. Returns an array of chains ([{q,r},…]).
+function placeRivers(tiles, seed) {
+  const rand = mulberry32(seed ^ 0x27d4eb2f);
+  const land = (t) => t && t.passable && t.terrain !== 'MOUNTAIN';
+  const sources = [...tiles.values()].filter(t => land(t) && t.elevation > 0.55);
+  // Deterministic shuffle, then take the highest few as springs.
+  for (let i = sources.length - 1; i > 0; i--) { const j = Math.floor(rand() * (i + 1)); [sources[i], sources[j]] = [sources[j], sources[i]]; }
+  sources.sort((a, b) => b.elevation - a.elevation);
+
+  const rivers = [];
+  const used = new Set();
+  const target = Math.min(8, 2 + Math.round(sources.length / 60));
+  for (const src of sources) {
+    if (rivers.length >= target) break;
+    if (used.has(key(src.q, src.r))) continue;
+    const chain = [];
+    const seen = new Set();
+    let cur = src, reachedWater = false;
+    while (cur && land(cur) && !seen.has(key(cur.q, cur.r)) && chain.length < 40) {
+      seen.add(key(cur.q, cur.r));
+      chain.push(cur);
+      let next = null, lowest = cur.elevation;
+      for (const n of neighbors(cur.q, cur.r)) {
+        const nt = tiles.get(key(n.q, n.r));
+        if (!nt) continue;
+        if (isWater(nt)) { reachedWater = true; next = null; break; }
+        if (nt.elevation < lowest && !seen.has(key(n.q, n.r))) { lowest = nt.elevation; next = nt; }
+      }
+      if (reachedWater) break;
+      cur = next;
+    }
+    if (chain.length < 3) continue;
+    for (const t of chain) {
+      if (t.river) continue;
+      t.river = true;
+      t.yields = { ...t.yields, food: t.yields.food + 1, gold: t.yields.gold + 1 };
+      t.moveCost = t.moveCost + 1;
+      used.add(key(t.q, t.r));
+    }
+    rivers.push(chain.map(t => ({ q: t.q, r: t.r })));
+  }
+  return rivers;
 }
 
 // Water connected to the map border is sea; any water it can't reach is an

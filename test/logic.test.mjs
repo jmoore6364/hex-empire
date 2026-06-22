@@ -72,6 +72,14 @@ check('isWater rejects land', !isWater({ terrain: 'GRASSLAND' }) && !isWater(nul
   check('connectedLand returns only passable tiles', [...mass].every(k => wl.tiles.get(k).passable));
   check('connectedLand is a subset of all land', mass.size <= [...wl.tiles.values()].filter(t => t.passable).length);
 }
+{
+  const wr = generateWorld(20, 42);
+  const rt = [...wr.tiles.values()].filter(t => t.river);
+  check('rivers are generated', wr.rivers.length > 0 && rt.length > 0);
+  check('river tiles are land', rt.every(t => t.passable && t.terrain !== 'MOUNTAIN'));
+  check('river tiles cost more to ford', rt.every(t => t.moveCost >= 2));
+  check('river tiles gain gold', rt.every(t => t.yields.gold >= 1));
+}
 
 // --- pathfinding ---
 // Build a tiny hand-made grid so the path result is predictable.

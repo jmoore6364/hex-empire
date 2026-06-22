@@ -46,6 +46,7 @@ export class UI {
     this.selTitle.textContent = def.name;
     const defMul = defenseMultiplier(tile.terrain);
     this.selBody.innerHTML =
+      (tile.river ? `<div class="row"><span style="color:#6fc4f0">River</span><span>+1 food, +1 gold · slow to ford</span></div>` : '') +
       (tile.resource ? `<div class="row"><span style="color:#f0c95a">Resource</span><span>${RESOURCES[tile.resource].name} (${resourceSummary(tile.resource)})</span></div>` : '') +
       `<div class="row"><span class="food">Food</span><span>${tile.yields.food}</span></div>` +
       `<div class="row"><span class="prod">Production</span><span>${tile.yields.prod}</span></div>` +

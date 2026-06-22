@@ -126,6 +126,9 @@ civilizations** spread across the map — who also war with each other.
 - **Tile resources** — Wheat, Fish, Horses, Iron, Gold and Stone spawn on
   matching terrain (deterministic per seed), boost that tile's yields, and show
   as floating gems once you've explored them.
+- **Rivers** — blue river courses run downhill from the highlands to the sea;
+  a river tile gains **+1 food and +1 gold** (fresh water & trade) but costs an
+  extra point to ford. Great city sites hug a river.
 - **Ranged combat** — a new **Archer** strikes from 2 tiles away and takes no
   counterattack; melee units must close to an adjacent hex. Selected units paint
   their attackable enemies red.

@@ -70,6 +70,19 @@ export class WorldView {
     if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
     this.group.add(this.tileMesh);
 
+    // Rivers: blue channels following their downhill chains.
+    if (world.rivers && world.rivers.length) {
+      const riverGroup = new THREE.Group();
+      const riverMat = new THREE.MeshStandardMaterial({ color: 0x3aa0e0, emissive: 0x103048, emissiveIntensity: 0.6, roughness: 0.35 });
+      for (const chain of world.rivers) {
+        const pts = chain.map(c => this.tops.get(key(c.q, c.r))).filter(Boolean).map(t => new THREE.Vector3(t.x, t.y + 0.12, t.z));
+        if (pts.length < 2) continue;
+        const curve = new THREE.CatmullRomCurve3(pts);
+        riverGroup.add(new THREE.Mesh(new THREE.TubeGeometry(curve, pts.length * 6, 0.08, 6, false), riverMat));
+      }
+      scene.add(riverGroup);
+    }
+
     this._initHighlights();
   }
 
