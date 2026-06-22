@@ -40,6 +40,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | Left-click your city | Open it: queue units/buildings |
 | **🔬 Research** button | Open the tech tree; click any tech to queue the path to it |
 | **📜 Civics** button | Open the civics tree; pick a government and slot policy cards |
+| **🕊 Diplomacy** button | Declare war on or make peace with rival civs |
 | `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect / close drawer |
 | **💾 Save / 📂 Load** | Save the game to your browser and resume it later (it also autosaves each turn) |
@@ -115,6 +116,10 @@ civilizations** spread across the map — who also war with each other.
   *and each other*. Each one researches, queues production, sends settlers out to
   expand, **rushes defenders or City Walls when threatened**, sieges enemy cities,
   and **pulls wounded units back to heal**.
+- **Diplomacy** — every civ pair is at **war** or **peace**. You can only attack
+  someone you're at war with, so pick your fights from the **🕊 Diplomacy** panel
+  (declare war / make peace). The AIs are opportunistic: they declare war on
+  weaker neighbours, gang up, and sue for peace when they're outmatched.
 
 **Pass 3 — characters & depth** *(in progress)*
 

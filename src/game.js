@@ -30,6 +30,7 @@ export class Game {
     this.explored = new Set();
     this.visible = new Set();
     this.ownership = new Map();        // "q,r" -> owning city
+    this.wars = new Set();             // "a,b" (a<b) pairs of civs at war
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
@@ -148,6 +149,7 @@ export class Game {
 
     const enemy = this.unitAt(q, r);
     if (enemy && enemy.owner !== unit.owner) {
+      if (!this.atWar(unit.owner, enemy.owner)) return { ok: false, msg: `At peace with ${this.civs[enemy.owner].name}` };
       if (!unit.def.attack) return { ok: false, msg: 'This unit cannot attack' };
       if (unit.embarked) return { ok: false, msg: 'Cannot attack while embarked' };
       const d = distance(unit, { q, r });
@@ -157,7 +159,10 @@ export class Game {
     }
     if (enemy && enemy.owner === unit.owner) return { ok: false, msg: 'Tile occupied' };
     const tcity = this.cityAt(q, r);
-    if (tcity && tcity.owner !== unit.owner) return this.attackCity(unit, tcity);
+    if (tcity && tcity.owner !== unit.owner) {
+      if (!this.atWar(unit.owner, tcity.owner)) return { ok: false, msg: `At peace with ${this.civs[tcity.owner].name}` };
+      return this.attackCity(unit, tcity);
+    }
 
     const opts = this._moveOpts(unit);
     const path = findPath(this.tiles, unit, { q, r }, this.occupied(unit), opts);
@@ -281,13 +286,13 @@ export class Game {
     const range = unit.def.range || 1;
     const out = [];
     for (const e of this.units) {
-      if (e.owner === unit.owner) continue;
+      if (e.owner === unit.owner || !this.atWar(unit.owner, e.owner)) continue;
       if (!this.visible.has(key(e.q, e.r))) continue;
       const d = distance(unit, e);
       if (d >= 1 && d <= range) out.push({ q: e.q, r: e.r });
     }
     for (const c of this.cities) {
-      if (c.owner === unit.owner || this.unitAt(c.q, c.r)) continue; // garrison shown via its unit
+      if (c.owner === unit.owner || !this.atWar(unit.owner, c.owner) || this.unitAt(c.q, c.r)) continue;
       if (!this.visible.has(key(c.q, c.r))) continue;
       const d = distance(unit, c);
       if (d >= 1 && d <= range) out.push({ q: c.q, r: c.r });
@@ -299,6 +304,54 @@ export class Game {
     this.units = this.units.filter(u => u !== unit);
     if (this.fx) this.fx.death(unit.mesh); // play a death animation, then dispose
     else this.scene.remove(unit.mesh);
+  }
+
+  // --- diplomacy ------------------------------------------------------------
+  _warKey(a, b) { return a < b ? `${a},${b}` : `${b},${a}`; }
+  atWar(a, b) { return a !== b && this.wars.has(this._warKey(a, b)); }
+  isCivAlive(owner) { return this.cities.some(c => c.owner === owner) || this.units.some(u => u.owner === owner); }
+
+  declareWar(a, b) {
+    if (a === b || this.atWar(a, b)) return;
+    this.wars.add(this._warKey(a, b));
+    if (a === 0 || b === 0) {
+      const other = a === 0 ? b : a;
+      this.events.push(a === 0 ? `War declared on ${this.civs[other].name}` : `${this.civs[other].name} has declared war on you!`);
+    }
+  }
+
+  makePeace(a, b) {
+    if (!this.atWar(a, b)) return;
+    this.wars.delete(this._warKey(a, b));
+    if (a === 0 || b === 0) {
+      const other = a === 0 ? b : a;
+      this.events.push(`Peace with ${this.civs[other].name}`);
+    }
+  }
+
+  // A civ's total military strength (sum of unit attack), for AI war decisions.
+  _mil(owner) {
+    let s = 0;
+    for (const u of this.units) if (u.owner === owner) s += u.def.attack || 0;
+    return s;
+  }
+
+  // AI diplomacy: pounce on a beatable peaceful rival, sue for peace if outmatched.
+  _aiDiplomacy(owner) {
+    if ((this.turn + owner) % 5 !== 0) return;
+    const myMil = this._mil(owner);
+    for (let other = 0; other < this.civs.length; other++) {
+      if (other === owner) continue;
+      if (this.atWar(owner, other) && this._mil(other) > myMil * 1.6) this.makePeace(owner, other);
+    }
+    if (myMil <= 0) return;
+    const prey = [];
+    for (let other = 0; other < this.civs.length; other++) {
+      if (other === owner || this.atWar(owner, other) || !this.isCivAlive(other)) continue;
+      if (this._mil(other) <= myMil) prey.push(other);
+    }
+    prey.sort((a, b) => this._mil(a) - this._mil(b));
+    if (prey.length) this.declareWar(owner, prey[0]);
   }
 
   // --- civics: governments & policies ---------------------------------------
@@ -544,6 +597,7 @@ export class Game {
         government: v.government,
         policies: [...v.policies],
       })),
+      wars: [...this.wars],
       gameOver: this.gameOver,
     };
   }
@@ -582,6 +636,7 @@ export class Game {
       v.policies = cd.policies || [];
     });
     this.treasury = this.civs[0].treasury;
+    this.wars = new Set(data.wars || []);
     this.gameOver = data.gameOver || null;
     this.recomputeOwnership();
     this.income = this.computeIncome(0);
@@ -654,6 +709,9 @@ export class Game {
     if (govs.length) civ.government = govs[govs.length - 1];
     this.setPolicies(owner, availablePolicies(civ.civics.researched));
 
+    // Diplomacy: pick fights it can win, sue for peace when outmatched.
+    this._aiDiplomacy(owner);
+
     // Production: defend threatened cities first, then expand, build, and arm.
     const myCities = this.cities.filter(c => c.owner === owner);
     const mySettlers = this.units.filter(u => u.owner === owner && u.def.canFound).length;
@@ -695,18 +753,18 @@ export class Game {
         }
       }
 
-      // Head toward the nearest visible rival asset, else wander.
-      const targets = [...this.units.filter(t => t.owner !== owner), ...this.cities.filter(c => c.owner !== owner)];
+      // Head toward the nearest enemy we're at war with, else wander.
+      const targets = [...this.units.filter(t => this.atWar(owner, t.owner)), ...this.cities.filter(c => this.atWar(owner, c.owner))];
       let dest = null;
       if (targets.length && u.def.attack) {
         const range = u.def.range || 1;
         const inReach = this.units
-          .filter(e => e.owner !== owner)
+          .filter(e => this.atWar(owner, e.owner))
           .sort((a, b) => distance(u, a) - distance(u, b))
           .find(e => distance(u, e) >= 1 && distance(u, e) <= range);
         if (inReach) { this.resolveCombat(u, inReach, range > 1); continue; }
         if (!u.embarked) {
-          const city = this.cities.find(c => c.owner !== owner && !this.unitAt(c.q, c.r) && distance(u, c) >= 1 && distance(u, c) <= range);
+          const city = this.cities.find(c => this.atWar(owner, c.owner) && !this.unitAt(c.q, c.r) && distance(u, c) >= 1 && distance(u, c) <= range);
           if (city) { this.attackCity(u, city); continue; }
         }
         targets.sort((a, b) => distance(u, a) - distance(u, b));

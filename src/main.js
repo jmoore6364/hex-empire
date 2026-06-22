@@ -10,6 +10,7 @@ import { UI } from './ui.js';
 import { TECHS, availableTechs, canResearch } from './tech.js';
 import { CIVICS, canResearch as canCivic, GOVERNMENTS, POLICIES, availableGovernments, availablePolicies } from './civics.js';
 import { BUILDINGS } from './buildings.js';
+import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
 import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
@@ -161,9 +162,35 @@ const civicsPanel = new TreePanel(game, {
 });
 researchPanel.syncButton();
 civicsPanel.syncButton();
-// Only one drawer open at a time.
-document.getElementById('research-btn').addEventListener('click', () => civicsPanel.close());
-document.getElementById('civics-btn').addEventListener('click', () => researchPanel.close());
+
+// --- diplomacy panel ---------------------------------------------------------
+const diploPanel = document.getElementById('diplomacy');
+const ownerHex = (o) => '#' + OWNER_COLOR[o].toString(16).padStart(6, '0');
+function renderDiplomacy() {
+  let h = '';
+  for (let o = 1; o < game.civs.length; o++) {
+    if (!game.isCivAlive(o)) continue;
+    const war = game.atWar(0, o);
+    h += `<div class="row"><span style="color:${ownerHex(o)}">${game.civs[o].name}</span>` +
+      `<span>${war ? '⚔ War' : '🕊 Peace'}<button class="act" data-civ="${o}">${war ? 'Make Peace' : 'Declare War'}</button></span></div>`;
+  }
+  document.getElementById('diplo-body').innerHTML = h || '<div class="row"><span>No rivals remain.</span></div>';
+  document.querySelectorAll('#diplo-body [data-civ]').forEach(b => b.addEventListener('click', () => {
+    const o = +b.dataset.civ;
+    if (game.atWar(0, o)) { game.makePeace(0, o); ui.toast(`Peace with ${game.civs[o].name}`, '#7fd17f'); }
+    else { game.declareWar(0, o); ui.toast(`War declared on ${game.civs[o].name}!`, '#ffb14a'); sound.play('attack'); }
+    renderDiplomacy();
+    if (selected) drawOverlays(null); // attackable targets changed
+  }));
+}
+function closeDrawers() { researchPanel.close(); civicsPanel.close(); diploPanel.style.display = 'none'; }
+document.getElementById('research-btn').addEventListener('click', () => { civicsPanel.close(); diploPanel.style.display = 'none'; });
+document.getElementById('civics-btn').addEventListener('click', () => { researchPanel.close(); diploPanel.style.display = 'none'; });
+document.getElementById('diplo-btn').addEventListener('click', () => {
+  const wasOpen = diploPanel.style.display !== 'none';
+  closeDrawers();
+  if (!wasOpen) { diploPanel.style.display = 'block'; renderDiplomacy(); }
+});
 
 // Government picker + policy-card slots, rendered into the Civics drawer.
 function renderGovPanel(g) {
@@ -434,8 +461,9 @@ function endTurn() {
   game.endTurn();
   ui.refreshTopbar(game);
   const ev = game.events;
-  ui.toast(ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`, ev.length ? '#7fd17f' : '#9fd0ff');
-  sound.play(ev.some(m => m.startsWith('Researched')) ? 'research' : ev.some(m => /trained|built/.test(m)) ? 'build' : 'turn');
+  const warEv = ev.find(m => /declared war on you/.test(m));
+  ui.toast(warEv || (ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`), warEv ? '#e88' : ev.length ? '#7fd17f' : '#9fd0ff');
+  sound.play(warEv ? 'attack' : ev.some(m => m.startsWith('Researched')) ? 'research' : ev.some(m => /trained|built/.test(m)) ? 'build' : 'turn');
   checkGameOver();
   // Keep a city panel open if you were managing one; otherwise start the turn on
   // your first ready unit.
@@ -451,6 +479,7 @@ function endTurn() {
   if (researchPanel.isOpen) researchPanel.render();
   civicsPanel.syncButton();
   if (civicsPanel.isOpen) civicsPanel.render();
+  if (diploPanel.style.display !== 'none') renderDiplomacy();
   const r0 = game.civs[0].research;
   const canPick = game.cities.some(c => c.owner === 0) && availableTechs(r0.researched).length > 0;
   if (!r0.queue.length && canPick) {
@@ -463,7 +492,7 @@ function endTurn() {
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') { if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else deselect(); }
+  if (e.code === 'Escape') { if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else if (diploPanel.style.display !== 'none') diploPanel.style.display = 'none'; else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 
