@@ -183,6 +183,17 @@ if (saveData) {
     const aw = freeNeighbor(spot.q, spot.r);
     game.spawnUnit('warrior', owner, aw.q, aw.r);
   }
+
+  // Barbarian camps out in the wilds, away from every civ's start.
+  const campLand = [...world.tiles.values()].filter(t => t.passable && t.terrain !== 'MOUNTAIN' && !t.resource);
+  const campCount = Math.max(3, Math.round(MAP_RADIUS / 6));
+  for (const t of campLand.sort(() => Math.random() - 0.5)) {
+    if (game.barbCamps.length >= campCount) break;
+    if (placed.some(p => distance(p, t) < 6)) continue;
+    if (game.barbCamps.some(c => distance(c, t) < 5)) continue;
+    if (game.unitAt(t.q, t.r) || game.cityAt(t.q, t.r)) continue;
+    game.addBarbCamp(t.q, t.r);
+  }
 }
 
 game.income = game.computeIncome();

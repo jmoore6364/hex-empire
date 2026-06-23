@@ -240,6 +240,24 @@ export class Unit {
   }
 }
 
+// A barbarian camp marker: dark tents, a campfire, and a red banner.
+export function buildBarbCampMesh() {
+  const g = new THREE.Group();
+  const hide = new THREE.MeshStandardMaterial({ color: 0x5a4632, flatShading: true, roughness: 0.95 });
+  for (const [x, z] of [[-0.24, 0.08], [0.24, 0.12]]) {
+    const tent = new THREE.Mesh(new THREE.ConeGeometry(0.22, 0.4, 4), hide);
+    tent.position.set(x, 0.2, z); tent.rotation.y = Math.PI / 4; tent.castShadow = true; g.add(tent);
+  }
+  const fire = new THREE.Mesh(new THREE.ConeGeometry(0.1, 0.22, 6),
+    new THREE.MeshStandardMaterial({ color: 0xff7a2a, emissive: 0xff5a18, emissiveIntensity: 0.9, roughness: 0.5 }));
+  fire.position.set(0, 0.11, -0.16); g.add(fire);
+  const pole = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.5, 5), new THREE.MeshStandardMaterial({ color: 0x2b2b2b }));
+  pole.position.set(-0.02, 0.25, 0.3); g.add(pole);
+  const flag = new THREE.Mesh(new THREE.PlaneGeometry(0.2, 0.13), new THREE.MeshStandardMaterial({ color: 0x8a2b2b, side: THREE.DoubleSide }));
+  flag.position.set(0.08, 0.42, 0.3); flag.castShadow = true; g.add(flag);
+  return g;
+}
+
 export class City {
   constructor(owner, q, r, name) {
     this.owner = owner;

@@ -163,6 +163,12 @@ civilizations** spread across the map — who also war with each other.
   *and each other*. Each one researches, queues production, sends settlers out to
   expand, **rushes defenders or City Walls when threatened**, sieges enemy cities,
   and **pulls wounded units back to heal**.
+- **Barbarians** — a neutral hostile faction (always at war with everyone) raids
+  out of **barbarian camps** scattered in the wilds, away from every civ's start.
+  Camps spawn raiders that hunt the nearest city or unit and get **tougher as the
+  game goes on**; clear a camp by moving a military unit onto it for a **+50 gold**
+  reward. The AI fights barbarians too. (They're handled as a special owner
+  outside the civ list, so they don't count toward victory.)
 - **Diplomacy** — every civ pair is at **war** or **peace**. You can only attack
   someone you're at war with, so pick your fights from the **🕊 Diplomacy** panel
   (declare war / make peace). The AIs are opportunistic: they declare war on

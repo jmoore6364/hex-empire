@@ -4,7 +4,7 @@
 // adding/removing the meshes that units and cities carry.
 import { key, distance, hexesInRange, neighbors } from './hex.js';
 import { findPath, reachable } from './pathfinding.js';
-import { Unit, City, UNIT_TYPES, OWNER_COLOR } from './units.js';
+import { Unit, City, UNIT_TYPES, OWNER_COLOR, buildBarbCampMesh } from './units.js';
 import { TECHS, ERAS, availableTechs, pathTo } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { DISTRICTS, DISTRICT_COST, buildingDistrict, unlockedDistricts } from './districts.js';
@@ -74,7 +74,15 @@ export class Game {
     this.difficulty = opts.difficulty || 'normal';
     this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
     this.turnLimit = opts.turnLimit || null; // score victory at this turn, if set
+
+    // Barbarians: a neutral hostile faction outside the civs list. Always at war
+    // with everyone; raids out of camps scattered in the wilds.
+    this.barbOwner = 9;
+    OWNER_COLOR[this.barbOwner] = 0x6e4a36;
+    this.barbCamps = [];
   }
+
+  isBarb(owner) { return owner === this.barbOwner; }
 
   // --- spawning -------------------------------------------------------------
   spawnUnit(type, owner, q, r) {
@@ -109,6 +117,7 @@ export class Game {
     for (const c of this.cities) if (c.owner === 0) reveal(c.q, c.r, 3);
     this.view.applyFog(this.visible, this.explored);
     this._updateMeshVisibility();
+    for (const c of this.barbCamps) c.mesh.visible = this.explored.has(key(c.q, c.r));
     this.updateBorders();
     this.updateDistricts();
   }
@@ -172,7 +181,8 @@ export class Game {
   // land and, with Sailing researched, may embark onto water.
   _moveOpts(unit) {
     if (unit.def.domain === 'sea') return { enter: (t) => isWater(t), cost: () => 1 };
-    const canSail = this.civs[unit.owner].research.researched.has('sailing');
+    const civ = this.civs[unit.owner]; // barbarians (no civ) never embark
+    const canSail = !!civ && civ.research.researched.has('sailing');
     return {
       enter: (t) => t.passable || (canSail && isWater(t)),
       cost: (t) => (t.passable ? t.moveCost : 1),
@@ -228,6 +238,7 @@ export class Game {
     unit.move = Math.max(0, remaining);
     unit.enqueuePath(taken, this.view);
     if (unit.def.domain !== 'sea') unit.setEmbarked(isWater(this.tiles.get(key(unit.q, unit.r))));
+    this._maybeClearCamp(unit); // razed a camp by moving onto it?
     this.recomputeFog();
     return { ok: true, taken };
   }
@@ -358,7 +369,11 @@ export class Game {
 
   // --- diplomacy ------------------------------------------------------------
   _warKey(a, b) { return a < b ? `${a},${b}` : `${b},${a}`; }
-  atWar(a, b) { return a !== b && this.wars.has(this._warKey(a, b)); }
+  atWar(a, b) {
+    if (a === b) return false;
+    if (a === this.barbOwner || b === this.barbOwner) return true; // barbarians fight all
+    return this.wars.has(this._warKey(a, b));
+  }
   isCivAlive(owner) { return this.cities.some(c => c.owner === owner) || this.units.some(u => u.owner === owner); }
 
   declareWar(a, b) {
@@ -404,11 +419,86 @@ export class Game {
     if (prey.length) this.declareWar(owner, prey[0]);
   }
 
+  // --- barbarians -----------------------------------------------------------
+  addBarbCamp(q, r) {
+    const mesh = buildBarbCampMesh();
+    const top = this.view.topOf(q, r);
+    if (top) mesh.position.set(top.x, top.y, top.z);
+    this.scene.add(mesh);
+    this.barbCamps.push({ q, r, mesh });
+  }
+
+  _freeLandNeighbor(q, r) {
+    for (const n of neighbors(q, r)) {
+      const t = this.tiles.get(key(n.q, n.r));
+      if (t && t.passable && t.terrain !== 'MOUNTAIN' && !this.unitAt(n.q, n.r) && !this.cityAt(n.q, n.r)) return n;
+    }
+    return null;
+  }
+
+  // Moving a non-barbarian unit onto a camp tile razes it for a gold reward.
+  _maybeClearCamp(unit) {
+    if (unit.owner === this.barbOwner) return;
+    const i = this.barbCamps.findIndex(c => c.q === unit.q && c.r === unit.r);
+    if (i < 0) return;
+    this.scene.remove(this.barbCamps[i].mesh);
+    this.barbCamps.splice(i, 1);
+    this.civs[unit.owner].treasury.gold += 50;
+    if (unit.owner === 0) this.events.push('Barbarian camp cleared! +50 gold');
+  }
+
+  // Clear any camp now standing under a non-barbarian unit (catches AI captures).
+  _sweepCamps() {
+    for (let i = this.barbCamps.length - 1; i >= 0; i--) {
+      const c = this.barbCamps[i];
+      const u = this.unitAt(c.q, c.r);
+      if (u && u.owner !== this.barbOwner) this._maybeClearCamp(u);
+    }
+  }
+
+  // Camps spawn raiders (throttled & capped); raiders hunt the nearest non-barb.
+  _runBarbarians() {
+    const barb = this.barbOwner;
+    const cap = 1 + this.barbCamps.length;
+    for (const camp of this.barbCamps) {
+      const guarded = this.units.some(u => u.owner === barb && u.q === camp.q && u.r === camp.r);
+      const count = this.units.filter(u => u.owner === barb).length;
+      if (!guarded && count < cap && (this.turn + camp.q * 7 + camp.r * 13) % 3 === 0) {
+        const here = this.tiles.get(key(camp.q, camp.r));
+        const spot = (here && here.passable && !this.unitAt(camp.q, camp.r)) ? { q: camp.q, r: camp.r } : this._freeLandNeighbor(camp.q, camp.r);
+        if (spot) this.spawnUnit(this.turn > 35 ? 'swordsman' : 'warrior', barb, spot.q, spot.r);
+      }
+    }
+    for (const u of this.units.filter(u => u.owner === barb)) {
+      u.move = u.def.move;
+      const range = u.def.range || 1;
+      const foe = this.units.filter(e => e.owner !== barb).sort((a, b) => distance(u, a) - distance(u, b))
+        .find(e => distance(u, e) >= 1 && distance(u, e) <= range);
+      if (foe) { this.resolveCombat(u, foe, range > 1); continue; }
+      const city = this.cities.find(c => !this.unitAt(c.q, c.r) && distance(u, c) >= 1 && distance(u, c) <= range);
+      if (city) { this.attackCity(u, city); continue; }
+      const targets = [...this.units.filter(t => t.owner !== barb), ...this.cities];
+      if (!targets.length) continue;
+      targets.sort((a, b) => distance(u, a) - distance(u, b));
+      const dest = targets[0];
+      const opts = this._moveOpts(u);
+      const reach = reachable(this.tiles, u, u.move, this.occupied(u), opts);
+      const options = [...reach.keys()];
+      if (!options.length) continue;
+      let pick = options[0], bestD = Infinity;
+      for (const k of options) { const [q, r] = k.split(',').map(Number); const d = distance({ q, r }, dest); if (d < bestD) { bestD = d; pick = k; } }
+      const [q, r] = pick.split(',').map(Number);
+      const path = findPath(this.tiles, u, { q, r }, this.occupied(u), opts);
+      if (path) u.enqueuePath(path, this.view);
+    }
+  }
+
   // --- civics: governments & policies ---------------------------------------
   // Aggregate a civ's active modifiers from its government plus adopted policies.
   civMods(owner) {
-    const civ = this.civs[owner];
     const mods = { foodMul: 1, prodMul: 1, goldMul: 1, sciMul: 1, combat: 0, settlerDiscount: 1, militaryDiscount: 1 };
+    if (owner === this.barbOwner) { mods.combat = Math.floor(this.turn / 40); return mods; } // barbs toughen over time
+    const civ = this.civs[owner];
     const merge = (eff) => {
       if (!eff) return;
       for (const k in eff) {
@@ -696,6 +786,7 @@ export class Game {
         policies: [...v.policies],
       })),
       wars: [...this.wars],
+      barbCamps: this.barbCamps.map(c => ({ q: c.q, r: c.r })),
       year: this.year,
       age: this.age,
       difficulty: this.difficulty,
@@ -709,7 +800,8 @@ export class Game {
   restore(data) {
     for (const u of this.units) this.scene.remove(u.mesh);
     for (const c of this.cities) this.scene.remove(c.mesh);
-    this.units = []; this.cities = [];
+    for (const c of this.barbCamps) this.scene.remove(c.mesh);
+    this.units = []; this.cities = []; this.barbCamps = [];
     this.turn = data.turn;
     this.year = data.year ?? -4000;
     this.age = data.age || 0;
@@ -751,6 +843,7 @@ export class Game {
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);
+    for (const cd of (data.barbCamps || [])) this.addBarbCamp(cd.q, cd.r);
     this.difficulty = data.difficulty || 'normal';
     this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
     this.turnLimit = data.turnLimit || null;
@@ -827,6 +920,8 @@ export class Game {
     this.ageAdvanced = null;
     this.ageBonus = null;
     this._runAI();
+    this._runBarbarians();
+    this._sweepCamps();
 
     for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
     this._processEconomy(0); // player economy
