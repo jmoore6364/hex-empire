@@ -543,11 +543,30 @@ export class Game {
       science: Math.round(y.science * m.sciMul),
       culture: y.culture,
     };
-    for (const id of city.districts.values()) { // flat district yields
+    for (const [tk, id] of city.districts) { // flat district yields + adjacency
       const dy = DISTRICTS[id]?.yield;
       if (dy) for (const k in dy) out[k] = (out[k] || 0) + dy[k];
+      const adj = this.districtAdjacency(city, tk, id);
+      for (const k in adj) out[k] = (out[k] || 0) + adj[k];
     }
     return out;
+  }
+
+  // A district's adjacency bonus from its neighbouring tiles: Campus loves
+  // mountains, the Commercial Hub rivers, the Industrial Zone hills/resources,
+  // and the Theater Square clustering with other districts.
+  districtAdjacency(city, tileKey, districtId) {
+    const [q, r] = tileKey.split(',').map(Number);
+    const b = { food: 0, prod: 0, gold: 0, science: 0, culture: 0 };
+    for (const n of neighbors(q, r)) {
+      const t = this.tiles.get(key(n.q, n.r));
+      if (!t) continue;
+      if (districtId === 'campus' && t.terrain === 'MOUNTAIN') b.science += 1;
+      else if (districtId === 'commercial' && t.river) b.gold += 1;
+      else if (districtId === 'industrial' && (t.terrain === 'HILLS' || t.terrain === 'MOUNTAIN' || t.resource)) b.prod += 1;
+      else if (districtId === 'theater' && city.districts.has(key(n.q, n.r))) b.culture += 1;
+    }
+    return b;
   }
 
   // Aggregate yields for a civ (used by the HUD for the player).
@@ -918,6 +937,20 @@ export class Game {
         ? { win: true, reason: `Turn limit reached — you led on score (${top.s}).` }
         : { win: false, reason: `Turn limit reached — ${this.civs[top.o].name} led on score (${top.s}).` };
     }
+  }
+
+  // Civs ranked by score, with the headline stats for the standings panel.
+  standings() {
+    const rows = this.civs.map((c, o) => ({
+      owner: o, name: c.name, id: c.id, alive: this.isCivAlive(o),
+      score: this._score(o),
+      cities: this.cities.filter(x => x.owner === o).length,
+      tech: c.research.researched.size,
+      wonders: [...this.wonders.values()].filter(w => w === o).length,
+      age: ERAS[c.age] || ERAS[0],
+    }));
+    rows.sort((a, b) => b.score - a.score);
+    return rows;
   }
 
   // A civ's score: cities & population, knowledge, and claimed territory.

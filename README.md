@@ -41,6 +41,7 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | **🔬 Research** button | Open the tech tree; click any tech to queue the path to it |
 | **📜 Civics** button | Open the civics tree; pick a government and slot policy cards |
 | **🕊 Diplomacy** button | Declare war on or make peace with rival civs |
+| **📊 Standings** button | See every civ ranked by score (cities, tech, wonders, age) |
 | `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect / close drawer |
 | **💾 Save / 📂 Load** | Save the game to your browser and resume it later (it also autosaves each turn) |
@@ -143,7 +144,11 @@ civilizations** spread across the map — who also war with each other.
   and the **Theater Square** (Monument, Amphitheater). A building can only be
   built once its district exists in that city, and each district adds a small flat
   yield; pick the **Build → 🏛 District**, then click one of the highlighted
-  tiles to site it. The AI builds districts too.
+  tiles to site it. The AI builds districts too. Districts earn **adjacency
+  bonuses** from their surroundings — the Campus gains science next to mountains,
+  the Commercial Hub gold beside rivers, the Industrial Zone production next to
+  hills/resources, and the Theater Square culture when clustered with other
+  districts — so where you place them matters.
 - **Buildings** — Granary/Aqueduct (+food), Workshop/Factory (+prod),
   Market/Bank (+gold), Library/University (+science) multiply their city's
   yields; City Walls fortify a garrison. Each is gated by its tech (and, where it

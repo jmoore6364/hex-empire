@@ -275,13 +275,31 @@ function renderDiplomacy() {
     if (selected) drawOverlays(null); // attackable targets changed
   }));
 }
-function closeDrawers() { researchPanel.close(); civicsPanel.close(); diploPanel.style.display = 'none'; }
-document.getElementById('research-btn').addEventListener('click', () => { civicsPanel.close(); diploPanel.style.display = 'none'; });
-document.getElementById('civics-btn').addEventListener('click', () => { researchPanel.close(); diploPanel.style.display = 'none'; });
+// --- standings panel ---------------------------------------------------------
+const standingsPanel = document.getElementById('standings');
+function renderStandings() {
+  const rows = game.standings().filter(r => r.alive);
+  let h = '<div class="strow sthead"><span>#</span><span>Civ</span><span>Score</span><span>Age</span><span>Cities</span><span>⭐</span></div>';
+  rows.forEach((r, i) => {
+    h += `<div class="strow${r.owner === 0 ? ' me' : ''}"><span>${i + 1}</span>` +
+      `<span class="nm">${emblemSVG(r.id, OWNER_COLOR[r.owner], 16)}${r.name}</span>` +
+      `<span>${r.score}</span><span>${r.age}</span><span>${r.cities}</span><span>${r.wonders}</span></div>`;
+  });
+  document.getElementById('standings-body').innerHTML = h;
+}
+
+function closeDrawers() { researchPanel.close(); civicsPanel.close(); diploPanel.style.display = 'none'; standingsPanel.style.display = 'none'; }
+document.getElementById('research-btn').addEventListener('click', () => { civicsPanel.close(); diploPanel.style.display = 'none'; standingsPanel.style.display = 'none'; });
+document.getElementById('civics-btn').addEventListener('click', () => { researchPanel.close(); diploPanel.style.display = 'none'; standingsPanel.style.display = 'none'; });
 document.getElementById('diplo-btn').addEventListener('click', () => {
   const wasOpen = diploPanel.style.display !== 'none';
   closeDrawers();
   if (!wasOpen) { diploPanel.style.display = 'block'; renderDiplomacy(); }
+});
+document.getElementById('standings-btn').addEventListener('click', () => {
+  const wasOpen = standingsPanel.style.display !== 'none';
+  closeDrawers();
+  if (!wasOpen) { standingsPanel.style.display = 'block'; renderStandings(); }
 });
 
 // Government picker + policy-card slots, rendered into the Civics drawer.
@@ -437,7 +455,12 @@ function refreshCityPanel() {
     buildings: [...c.buildings].map(id => BUILDINGS[id].name),
   };
 
-  model.districts = [...c.districts.values()].map(id => `${DISTRICTS[id].glyph} ${DISTRICTS[id].name}`);
+  const yglyph = { food: '🌾', prod: '⚒', gold: '🪙', science: '🔬', culture: '🎭' };
+  model.districts = [...c.districts].map(([tk, id]) => {
+    const adj = game.districtAdjacency(c, tk, id);
+    const parts = Object.entries(adj).filter(([, v]) => v > 0).map(([k, v]) => `+${v}${yglyph[k]}`);
+    return `${DISTRICTS[id].glyph} ${DISTRICTS[id].name}${parts.length ? ' ' + parts.join(' ') : ''}`;
+  });
   model.wonders = [...c.wonders].map(id => `${WONDERS[id].glyph} ${WONDERS[id].name}`);
 
   const actions = [];
@@ -638,6 +661,7 @@ function endTurn() {
   civicsPanel.syncButton();
   if (civicsPanel.isOpen) civicsPanel.render();
   if (diploPanel.style.display !== 'none') renderDiplomacy();
+  if (standingsPanel.style.display !== 'none') renderStandings();
   const r0 = game.civs[0].research;
   const canPick = game.cities.some(c => c.owner === 0) && availableTechs(r0.researched).length > 0;
   if (!r0.queue.length && canPick) {
@@ -650,7 +674,7 @@ function endTurn() {
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else if (diploPanel.style.display !== 'none') diploPanel.style.display = 'none'; else deselect(); }
+  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else if (diploPanel.style.display !== 'none') diploPanel.style.display = 'none'; else if (standingsPanel.style.display !== 'none') standingsPanel.style.display = 'none'; else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 
