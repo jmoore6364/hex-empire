@@ -6,7 +6,7 @@ import { TERRAIN } from './worldgen.js';
 import { RESOURCES } from './resources.js';
 import { mergeGeometries } from '../vendor/jsm/utils/BufferGeometryUtils.js';
 
-const UNEXPLORED = new THREE.Color(0x0c1018);
+const UNEXPLORED = new THREE.Color(0xb4bcc6); // unseen tiles read as a neutral light grey
 const ZERO_MATRIX = new THREE.Matrix4().makeScale(0, 0, 0); // collapses a hidden decoration
 const WATER = new Set(['OCEAN', 'COAST', 'LAKE']);
 const DECO_MAT = new THREE.MeshStandardMaterial({ vertexColors: true, flatShading: true, roughness: 0.85 });
@@ -209,8 +209,8 @@ export class WorldView {
     for (const [k, i] of this.tileIndex) {
       const base = this.baseColors[i];
       if (visible.has(k)) c.copy(base);
-      else if (explored.has(k)) c.copy(base).multiplyScalar(0.45); // dimmed memory
-      else c.copy(UNEXPLORED);
+      else if (explored.has(k)) c.copy(base).multiplyScalar(0.8); // seen before — full colour, a touch dim
+      else c.copy(UNEXPLORED);                                    // never seen — light grey
       this.tileMesh.setColorAt(i, c);
       const mk = this.resourceMarkers.get(k);
       if (mk) mk.visible = explored.has(k);

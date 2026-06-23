@@ -73,7 +73,7 @@ renderer.setPixelRatio(Math.min(devicePixelRatio, 2));
 renderer.shadowMap.enabled = true;
 renderer.shadowMap.type = THREE.PCFSoftShadowMap;
 renderer.toneMapping = THREE.ACESFilmicToneMapping; // richer contrast & colour
-renderer.toneMappingExposure = 1.08;
+renderer.toneMappingExposure = 1.25;
 app.appendChild(renderer.domElement);
 
 const scene = new THREE.Scene();
@@ -83,7 +83,7 @@ function gradientSky() {
   c.width = 2; c.height = 256;
   const ctx = c.getContext('2d');
   const g = ctx.createLinearGradient(0, 0, 0, 256);
-  g.addColorStop(0, '#0b1626'); g.addColorStop(0.55, '#1a2c44'); g.addColorStop(1, '#2c4a6b');
+  g.addColorStop(0, '#15273e'); g.addColorStop(0.55, '#28425f'); g.addColorStop(1, '#3e638c');
   ctx.fillStyle = g; ctx.fillRect(0, 0, 2, 256);
   const tex = new THREE.CanvasTexture(c);
   tex.colorSpace = THREE.SRGBColorSpace;
@@ -91,13 +91,13 @@ function gradientSky() {
 }
 scene.background = gradientSky();
 // Atmospheric fade scales with the map; tinted to the horizon so it blends in.
-scene.fog = new THREE.Fog(0x1a2c44, FOG_REF * 2.8, FOG_REF * 8.5);
+scene.fog = new THREE.Fog(0x28425f, FOG_REF * 2.8, FOG_REF * 8.5);
 
 const camera = new THREE.PerspectiveCamera(55, vpW() / vpH(), 0.1, 300);
 
-const hemi = new THREE.HemisphereLight(0xdcecff, 0x3a3024, 0.75);
+const hemi = new THREE.HemisphereLight(0xe6f0ff, 0x55503f, 1.15);
 scene.add(hemi);
-const sun = new THREE.DirectionalLight(0xfff0d8, 1.55);
+const sun = new THREE.DirectionalLight(0xfff3e0, 2.1);
 sun.position.set(20, 32, 14);
 sun.castShadow = true;
 sun.shadow.mapSize.set(2048, 2048);
