@@ -217,24 +217,22 @@ function checkGameOver() {
 }
 document.getElementById('go-new').addEventListener('click', () => location.reload());
 
-// Sound effects (synthesized; muteable).
+// Sound + music live in the Settings tab (toggled with checkboxes).
 const sound = new Sound();
 if (!startOpts.load && startOpts.sound === false) sound.setEnabled(false); // honour the menu toggle
-const muteBtn = document.getElementById('mute-btn');
-muteBtn.textContent = sound.enabled ? '🔊' : '🔇';
-muteBtn.addEventListener('click', () => { sound.setEnabled(!sound.enabled); muteBtn.textContent = sound.enabled ? '🔊' : '🔇'; if (sound.enabled) sound.play('select'); });
-
-// Ambient background music (own toggle; starts on the Start-button gesture).
-const musicBtn = document.getElementById('music-btn');
+const soundChk = document.getElementById('set-sound');
+const musicChk = document.getElementById('set-music');
 const wantMusic = localStorage.getItem('hexempire-music') !== '0';
 if (wantMusic && (startOpts.load || startOpts.sound !== false)) sound.startMusic();
-const syncMusicBtn = () => { musicBtn.style.opacity = sound.musicOn ? '1' : '0.45'; };
-syncMusicBtn();
-musicBtn.addEventListener('click', () => { if (sound.musicOn) sound.stopMusic(); else sound.startMusic(); syncMusicBtn(); });
+function renderSettings() { soundChk.checked = sound.enabled; musicChk.checked = sound.musicOn; }
+renderSettings();
+soundChk.addEventListener('change', () => { sound.setEnabled(soundChk.checked); if (sound.enabled) sound.play('select'); });
+musicChk.addEventListener('change', () => { if (musicChk.checked) sound.startMusic(); else sound.stopMusic(); });
+document.getElementById('menu-return').addEventListener('click', () => location.reload());
 
 // Research (science) and Civics (culture) tree drawers.
 const researchPanel = new TreePanel(game, {
-  ids: { drawer: 'research', tree: 'tech-tree', current: 'research-current', btn: 'research-btn' },
+  ids: { drawer: 'research', tree: 'tech-tree', current: 'research-current' },
   catalogue: TECHS, canPick: canResearch,
   state: (g) => g.civs[0].research,
   bank: (g) => Math.floor(g.treasury.science),
@@ -243,7 +241,7 @@ const researchPanel = new TreePanel(game, {
   onPick: (id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); },
 });
 const civicsPanel = new TreePanel(game, {
-  ids: { drawer: 'civics', tree: 'civics-tree', current: 'civics-current', btn: 'civics-btn' },
+  ids: { drawer: 'civics', tree: 'civics-tree', current: 'civics-current' },
   catalogue: CIVICS, canPick: canCivic,
   state: (g) => g.civs[0].civics,
   bank: (g) => Math.floor(g.civs[0].treasury.culture),
@@ -288,15 +286,18 @@ function renderStandings() {
   document.getElementById('standings-body').innerHTML = h;
 }
 
-// --- unified side drawer (tabs: research / civics / diplomacy / standings) ----
+// --- one side drawer, opened by the edge menu handle (no main-screen buttons) -
 const sidebar = document.getElementById('sidebar');
 const sideTabs = [...document.querySelectorAll('.side-tab')];
-let activeTab = null;
+const settingsPane = document.getElementById('settings');
+const menuHandle = document.getElementById('menu-handle');
+let activeTab = 'research';
 function renderTab(tab) {
   if (tab === 'research') researchPanel.render();
   else if (tab === 'civics') civicsPanel.render();
   else if (tab === 'diplomacy') renderDiplomacy();
   else if (tab === 'standings') renderStandings();
+  else if (tab === 'settings') renderSettings();
 }
 function setTab(tab) {
   activeTab = tab;
@@ -304,20 +305,23 @@ function setTab(tab) {
   civicsPanel[tab === 'civics' ? 'open' : 'close']();
   diploPane.classList.toggle('open', tab === 'diplomacy');
   standPane.classList.toggle('open', tab === 'standings');
+  settingsPane.classList.toggle('open', tab === 'settings');
   sideTabs.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
   renderTab(tab);
 }
-function openSidebar(tab) { sidebar.classList.add('open'); setTab(tab); }
-function closeSidebar() { sidebar.classList.remove('open'); }
 const sidebarOpen = () => sidebar.classList.contains('open');
-function toggleTab(tab) { if (sidebarOpen() && activeTab === tab) closeSidebar(); else openSidebar(tab); }
+function openSidebar(tab) { sidebar.classList.add('open'); menuHandle.style.display = 'none'; setTab(tab || activeTab); }
+function closeSidebar() { sidebar.classList.remove('open'); menuHandle.style.display = ''; }
+// Nudge the handle when there's no research queued.
+function syncMenuHandle() {
+  const needs = !game.civs[0].research.queue.length && game.cities.some(c => c.owner === 0);
+  menuHandle.classList.toggle('attention', needs && !sidebarOpen());
+}
 
 sideTabs.forEach(b => b.addEventListener('click', () => openSidebar(b.dataset.tab)));
 document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
-document.getElementById('research-btn').addEventListener('click', () => toggleTab('research'));
-document.getElementById('civics-btn').addEventListener('click', () => toggleTab('civics'));
-document.getElementById('diplo-btn').addEventListener('click', () => toggleTab('diplomacy'));
-document.getElementById('standings-btn').addEventListener('click', () => toggleTab('standings'));
+menuHandle.addEventListener('click', () => openSidebar());
+syncMenuHandle();
 
 // Government picker + policy-card slots, rendered into the Civics drawer.
 function renderGovPanel(g) {
@@ -673,9 +677,8 @@ function endTurn() {
 
   // Research / civics: keep the drawers/buttons current; prompt for a new tech
   // when the research queue runs dry.
-  researchPanel.syncButton();
-  civicsPanel.syncButton();
   if (sidebarOpen()) renderTab(activeTab);
+  syncMenuHandle();
   const r0 = game.civs[0].research;
   const canPick = game.cities.some(c => c.owner === 0) && availableTechs(r0.researched).length > 0;
   if (!r0.queue.length && canPick) {

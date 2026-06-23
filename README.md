@@ -38,10 +38,12 @@ npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfindi
 | Left-click adjacent enemy | Attack |
 | **Found City** button | Settle your Settler on its current tile |
 | Left-click your city | Open it: queue units/buildings |
-| **🔬 Research** button | Open the tech tree; click any tech to queue the path to it |
-| **📜 Civics** button | Open the civics tree; pick a government and slot policy cards |
-| **🕊 Diplomacy** button | Declare war on or make peace with rival civs |
-| **📊 Standings** button | See every civ ranked by score (cities, tech, wonders, age) |
+| **☰ Menu** handle (right edge) | Opens the side drawer — tabs for **🔬 Research**, **📜 Civics**, **🕊 Diplomacy**, **📊 Standings** and **⚙️ Settings** |
+| 🔬 Research tab | The tech tree; click any tech to queue the path to it |
+| 📜 Civics tab | The civics tree; pick a government and slot policy cards |
+| 🕊 Diplomacy tab | Declare war on or make peace with rival civs |
+| 📊 Standings tab | Every civ ranked by score (cities, tech, wonders, age) |
+| ⚙️ Settings tab | Sound, music, save / load, and the controls reference |
 | `Tab` / Skip | Jump to the next unit that still has moves |
 | `Space` | End turn · `Esc` deselect / close drawer |
 | **💾 Save / 📂 Load** | Save the game to your browser and resume it later (it also autosaves each turn) |

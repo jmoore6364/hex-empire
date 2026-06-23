@@ -61,6 +61,20 @@
     .side-pane { display: none; flex: 1; min-height: 0; flex-direction: column; }
     .side-pane.open { display: flex; }
     .side-pane > h3 { font-size: 16px; color: #cfe0f5; padding: 12px 16px 4px; }
+
+    #menu-handle { position: absolute; top: 50%; right: 0; transform: translateY(-50%);
+      background: rgba(16,22,33,0.9); color: #cfe6ff; border: 1px solid rgba(120,160,210,0.4); border-right: none;
+      border-radius: 8px 0 0 8px; padding: 14px 9px; font-size: 18px; cursor: pointer; z-index: 5; pointer-events: auto; }
+    #menu-handle:hover { border-color: #6fb7e8; }
+    #menu-handle.attention { box-shadow: 0 0 0 2px #6fd0e8; animation: pulse 1.4s ease-in-out infinite; }
+    @keyframes pulse { 0%,100% { box-shadow: 0 0 0 2px rgba(111,208,232,0.4); } 50% { box-shadow: 0 0 0 4px rgba(111,208,232,0.8); } }
+
+    .set-body { padding: 8px 16px; font-size: 14px; }
+    .set-row { display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid rgba(120,160,210,0.12); cursor: pointer; }
+    .set-row input { width: 18px; height: 18px; }
+    .set-btns { display: flex; flex-direction: column; gap: 8px; margin: 16px 0; }
+    .set-btns .act { padding: 11px; font-size: 14px; text-align: center; }
+    .set-controls { font-size: 12px; opacity: 0.7; line-height: 1.7; margin-top: 8px; }
     .tree-current { padding: 10px 16px; font-size: 13px; border-bottom: 1px solid rgba(120,160,210,0.15); min-height: 20px; }
     .tree-current .bar { height: 6px; border-radius: 3px; background: #1c2840; margin-top: 6px; overflow: hidden; }
     .tree-current .bar > i { display: block; height: 100%; background: linear-gradient(90deg,#3f86c6,#6fd0e8); }
@@ -207,32 +221,13 @@
     <div class="stat cult"><span class="label">Culture</span><b id="cult">0</b></div>
   </div>
 
-  <div id="help" class="panel">
-    <h3>Controls</h3>
-    <kbd>WASD</kbd>/<kbd>arrows</kbd>/<kbd>drag</kbd> pan · <kbd>Q</kbd>/<kbd>E</kbd> rotate<br />
-    <kbd>scroll</kbd>/<kbd>pinch</kbd> zoom · <kbd>right-drag</kbd> orbit<br />
-    <kbd>left-click</kbd> select / move unit<br />
-    <kbd>Tab</kbd> next unit · <kbd>Space</kbd> end turn
-    <div style="margin-top: 8px; display: flex; gap: 6px; pointer-events: auto;">
-      <button id="save-btn" class="act">💾 Save</button>
-      <button id="load-btn" class="act">📂 Load</button>
-      <button id="mute-btn" class="act" title="Sound on/off">🔊</button>
-      <button id="music-btn" class="act" title="Music on/off">🎵</button>
-    </div>
-  </div>
-
   <div id="selection" class="panel" style="display:none">
     <h3 id="sel-title">—</h3>
     <div id="sel-body"></div>
     <div class="actions" id="sel-actions"></div>
   </div>
 
-  <div id="topmid">
-    <button id="research-btn" class="drawer-btn">🔬 Research</button>
-    <button id="civics-btn" class="drawer-btn">📜 Civics</button>
-    <button id="diplo-btn" class="drawer-btn">🕊 Diplomacy</button>
-    <button id="standings-btn" class="drawer-btn">📊 Standings</button>
-  </div>
+  <button id="menu-handle" title="Menu">☰</button>
 
   <div id="sidebar">
     <div class="side-tabs">
@@ -240,6 +235,7 @@
       <button class="side-tab" data-tab="civics" title="Civics">📜</button>
       <button class="side-tab" data-tab="diplomacy" title="Diplomacy">🕊</button>
       <button class="side-tab" data-tab="standings" title="Standings">📊</button>
+      <button class="side-tab" data-tab="settings" title="Settings">⚙️</button>
       <button id="sidebar-close" class="side-close" title="Close">✕</button>
     </div>
     <div class="side-body">
@@ -259,6 +255,24 @@
       <div id="standings" class="side-pane">
         <h3>Standings</h3>
         <div id="standings-body"></div>
+      </div>
+      <div id="settings" class="side-pane">
+        <h3>Settings</h3>
+        <div class="set-body">
+          <label class="set-row"><span>🔊 Sound effects</span><input type="checkbox" id="set-sound"></label>
+          <label class="set-row"><span>🎵 Music</span><input type="checkbox" id="set-music"></label>
+          <div class="set-btns">
+            <button id="save-btn" class="act">💾 Save game</button>
+            <button id="load-btn" class="act">📂 Load game</button>
+            <button id="menu-return" class="act">🏳 Main menu</button>
+          </div>
+          <div class="set-controls">
+            <b>Controls</b><br>
+            <kbd>WASD</kbd>/<kbd>arrows</kbd>/<kbd>drag</kbd> pan · <kbd>Q</kbd>/<kbd>E</kbd> rotate<br>
+            <kbd>scroll</kbd>/<kbd>pinch</kbd> zoom · <kbd>right-drag</kbd> orbit<br>
+            <kbd>left-click</kbd> select / move · <kbd>Tab</kbd> next unit · <kbd>Space</kbd> end turn
+          </div>
+        </div>
       </div>
     </div>
   </div>
