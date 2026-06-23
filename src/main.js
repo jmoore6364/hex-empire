@@ -572,9 +572,11 @@ function handleClick(ev) {
 
 // --- turns -------------------------------------------------------------------
 // A big centred banner when the empire enters a new age.
-function showEraBanner(name) {
+function showEraBanner(name, bonus) {
   const el = document.getElementById('era-banner');
   document.getElementById('era-title').textContent = `The ${name} Era`;
+  document.getElementById('era-bonus').textContent = bonus
+    ? `Era bonus: +${bonus.gold} gold · +${bonus.science} science · +${bonus.culture} culture` : '';
   el.classList.remove('show');
   void el.offsetWidth; // restart the CSS animation
   el.classList.add('show');
@@ -587,7 +589,7 @@ function endTurn() {
   if (game.units.some(u => u.isMoving)) return; // let animations settle
   game.endTurn();
   ui.refreshTopbar(game);
-  if (game.ageAdvanced) showEraBanner(game.ageAdvanced);
+  if (game.ageAdvanced) showEraBanner(game.ageAdvanced, game.ageBonus);
   const ev = game.events;
   const warEv = ev.find(m => /declared war on you/.test(m));
   ui.toast(warEv || (ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`), warEv ? '#e88' : ev.length ? '#7fd17f' : '#9fd0ff');

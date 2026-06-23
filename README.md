@@ -87,8 +87,11 @@ civilizations** spread across the map — who also war with each other.
 - **Year & age** — the HUD tracks a **calendar year** (from 4000 BC, advancing
   each turn — faster as history accelerates) and the empire's **age** (Ancient →
   Classical → Medieval → Industrial → Modern), derived from your most advanced
-  tech. Reaching a new era's first tech triggers a **big "A New Age Dawns"
-  banner** with a fanfare. Year & age are saved with the game.
+  tech, with an **era-progress indicator** (techs researched in the current age,
+  e.g. `Classical 1/4`). Reaching a new era's first tech triggers a **big "A New
+  Age Dawns" banner** with a fanfare and a **one-time era bonus** (gold, science &
+  culture, scaling with the age). Each AI civ ages and earns the bonus too. Year
+  & ages are saved with the game.
 
 **Pass 1 — the playable core**
 

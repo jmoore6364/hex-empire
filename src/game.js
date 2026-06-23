@@ -60,6 +60,8 @@ export class Game {
         owner: i, name: (cfg && cfg.name) || CIV_NAMES[i] || `Civ ${i}`,
         id: (cfg && cfg.id) || null,   // civilization id, for unique units
         trait: (cfg && cfg.trait) || null,
+        age: 0,                        // most advanced tech era reached
+
         treasury: { gold: 0, science: 0, culture: 0 },
         research: { researched: new Set(), queue: [] },
         civics: { researched: new Set(), queue: [] },
@@ -658,6 +660,7 @@ export class Game {
     }
     this._processResearch(civ);
     this._processCivics(civ);
+    this._advanceAge(owner);
   }
 
   // A unit that held position recovers HP — most inside a friendly city, some on
@@ -685,7 +688,7 @@ export class Game {
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
-        name: v.name, id: v.id, trait: v.trait, color: OWNER_COLOR[i],
+        name: v.name, id: v.id, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
         treasury: { ...v.treasury },
         research: { researched: [...v.research.researched], queue: [...v.research.queue] },
         civics: { researched: [...v.civics.researched], queue: [...v.civics.queue] },
@@ -744,6 +747,7 @@ export class Game {
       if (cd.name) v.name = cd.name;
       if ('id' in cd) v.id = cd.id;
       if ('trait' in cd) v.trait = cd.trait;
+      v.age = cd.age || 0;
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);
@@ -796,9 +800,32 @@ export class Game {
   ageName() { return ERAS[this.age] || ERAS[ERAS.length - 1]; }
   yearLabel() { return this.year < 0 ? `${-this.year} BC` : `AD ${this.year}`; }
 
+  // How many of the current age's techs the player has, for the HUD indicator.
+  eraProgress() {
+    let done = 0, total = 0;
+    for (const [id, t] of Object.entries(TECHS)) if (t.era === this.age) { total++; if (this.civs[0].research.researched.has(id)) done++; }
+    return { done, total };
+  }
+
+  // Promote a civ to a new age when it researches a tech of a higher era, and
+  // grant a one-time era bonus (scaled by age) to its treasury.
+  _advanceAge(owner) {
+    const civ = this.civs[owner];
+    let era = 0;
+    for (const id of civ.research.researched) era = Math.max(era, TECHS[id]?.era ?? 0);
+    if (era <= (civ.age || 0)) return;
+    civ.age = era;
+    const bonus = { gold: era * 50, science: era * 40, culture: era * 20 };
+    civ.treasury.gold += bonus.gold;
+    civ.treasury.science += bonus.science;
+    civ.treasury.culture += bonus.culture;
+    if (owner === 0) { this.age = era; this.ageAdvanced = this.ageName(); this.ageBonus = bonus; this.events.push(`A new age dawns: the ${this.ageName()} Era`); }
+  }
+
   endTurn() {
     this.events = [];
     this.ageAdvanced = null;
+    this.ageBonus = null;
     this._runAI();
 
     for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
@@ -806,11 +833,9 @@ export class Game {
     this.income = this.computeIncome(0);
 
     this.turn++;
-    // Advance the calendar, and the age when the player reaches a new era.
+    // Advance the calendar (faster as history accelerates). Ages advance per-civ
+    // in _processEconomy.
     this.year += AGE_YEAR_STEP[this.age] || AGE_YEAR_STEP[AGE_YEAR_STEP.length - 1];
-    let newAge = 0;
-    for (const id of this.civs[0].research.researched) newAge = Math.max(newAge, TECHS[id]?.era ?? 0);
-    if (newAge > this.age) { this.age = newAge; this.ageAdvanced = this.ageName(); this.events.push(`A new age dawns: the ${this.ageName()} Era`); }
 
     for (const u of this.units) if (u.owner === 0) {
       if (u.move === u.def.move) this._heal(u); // didn't act this turn — recover
