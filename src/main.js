@@ -11,6 +11,7 @@ import { TECHS, availableTechs, canResearch } from './tech.js';
 import { CIVICS, canResearch as canCivic, GOVERNMENTS, POLICIES, availableGovernments, availablePolicies } from './civics.js';
 import { BUILDINGS } from './buildings.js';
 import { DISTRICTS } from './districts.js';
+import { WONDERS } from './wonders.js';
 import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
 import { HealthBars } from './health.js';
@@ -437,17 +438,22 @@ function refreshCityPanel() {
   };
 
   model.districts = [...c.districts.values()].map(id => `${DISTRICTS[id].glyph} ${DISTRICTS[id].name}`);
+  model.wonders = [...c.wonders].map(id => `${WONDERS[id].glyph} ${WONDERS[id].name}`);
 
   const actions = [];
   const coastal = game.isCoastal(c);
   const queuedBuildings = new Set(c.queue.filter(i => i.kind === 'building').map(i => i.id));
   const queuedDistricts = new Set(c.queue.filter(i => i.kind === 'district').map(i => i.id));
+  const queuedWonders = new Set(c.queue.filter(i => i.kind === 'wonder').map(i => i.id));
   for (const item of game.buildOptions(0, c)) {
     if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
     if (item.kind === 'district' && queuedDistricts.has(item.id)) continue;
+    if (item.kind === 'wonder' && queuedWonders.has(item.id)) continue;
     if (item.domain === 'sea' && !coastal) continue; // ships need a coastal city
     const turns = game.turnsFor(c, game.itemCost(0, item), false);
-    if (item.kind === 'district') {
+    if (item.kind === 'wonder') {
+      actions.push({ label: `${item.glyph} ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
+    } else if (item.kind === 'district') {
       const sites = game.districtSites(c).length;
       actions.push({ label: `🏛 ${item.name} (${turns}t)`, enabled: sites > 0, onClick: () => beginPlaceDistrict(c, item) });
     } else {
@@ -584,25 +590,34 @@ function handleClick(ev) {
 }
 
 // --- turns -------------------------------------------------------------------
-// A big centred banner when the empire enters a new age.
-function showEraBanner(name, bonus) {
+// A big centred banner (used for new ages and completed wonders).
+function showBanner(sub, title, extra) {
   const el = document.getElementById('era-banner');
-  document.getElementById('era-title').textContent = `The ${name} Era`;
-  document.getElementById('era-bonus').textContent = bonus
-    ? `Era bonus: +${bonus.gold} gold · +${bonus.science} science · +${bonus.culture} culture` : '';
+  document.getElementById('era-sub').textContent = sub;
+  document.getElementById('era-title').textContent = title;
+  document.getElementById('era-bonus').textContent = extra || '';
   el.classList.remove('show');
   void el.offsetWidth; // restart the CSS animation
   el.classList.add('show');
   sound.play('victory');
-  clearTimeout(showEraBanner._t);
-  showEraBanner._t = setTimeout(() => el.classList.remove('show'), 4000);
+  clearTimeout(showBanner._t);
+  showBanner._t = setTimeout(() => el.classList.remove('show'), 4000);
+}
+function showEraBanner(name, bonus) {
+  showBanner('A NEW AGE DAWNS', `The ${name} Era`,
+    bonus ? `Era bonus: +${bonus.gold} gold · +${bonus.science} science · +${bonus.culture} culture` : '');
+}
+function showWonderBanner(w) {
+  showBanner('A WONDER OF THE WORLD', `${w.glyph} ${w.name}`,
+    w.you ? `Completed in ${w.city}` : `Completed by ${game.civs[w.owner].name}`);
 }
 
 function endTurn() {
   if (game.units.some(u => u.isMoving)) return; // let animations settle
   game.endTurn();
   ui.refreshTopbar(game);
-  if (game.ageAdvanced) showEraBanner(game.ageAdvanced, game.ageBonus);
+  if (game.wonderBuilt) showWonderBanner(game.wonderBuilt);
+  else if (game.ageAdvanced) showEraBanner(game.ageAdvanced, game.ageBonus);
   const ev = game.events;
   const warEv = ev.find(m => /declared war on you/.test(m));
   ui.toast(warEv || (ev.length ? ev[ev.length - 1] : `Turn ${game.turn}`), warEv ? '#e88' : ev.length ? '#7fd17f' : '#9fd0ff');

@@ -84,6 +84,7 @@ export class UI {
         ? row(`<span class="prod">${model.producing.name}</span>`, `${model.producing.turns}t`)
         : `<div class="row"><span style="opacity:.55">Idle — pick something to build</span></div>`;
       for (const q of model.queue) h += row(`<span style="opacity:.7">• ${q.name}</span>`, `${q.turns}t`);
+      if (model.wonders && model.wonders.length) { h += sec('Wonders'); h += `<div class="row"><span style="color:#f4cf5a">${model.wonders.join(', ')}</span></div>`; }
       if (model.districts && model.districts.length) { h += sec('Districts'); h += `<div class="row"><span>${model.districts.join(', ')}</span></div>`; }
       if (model.buildings.length) { h += sec('Buildings'); h += `<div class="row"><span>${model.buildings.join(', ')}</span></div>`; }
     }

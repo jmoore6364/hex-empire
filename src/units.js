@@ -271,6 +271,7 @@ export class City {
     this.hp = 0;                // defence; set to max when founded (see game.js)
     this.tiles = new Set();     // owned tile-keys; grows one tile at a time
     this.districts = new Map(); // tile-key -> district id placed there
+    this.wonders = new Set();   // world wonders completed here
     this.borderProgress = 0;    // culture banked toward claiming the next tile
     this.ownerMats = [];        // materials recoloured when the city changes hands
     this.mesh = this._build();

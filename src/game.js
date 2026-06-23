@@ -8,6 +8,7 @@ import { Unit, City, UNIT_TYPES, OWNER_COLOR, buildBarbCampMesh } from './units.
 import { TECHS, ERAS, availableTechs, pathTo } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { DISTRICTS, DISTRICT_COST, buildingDistrict, unlockedDistricts } from './districts.js';
+import { WONDERS, unlockedWonders } from './wonders.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from './territory.js';
 import { cityYields } from './economy.js';
 import { resolveAttack } from './combat.js';
@@ -46,6 +47,8 @@ export class Game {
     this.visible = new Set();
     this.ownership = new Map();        // "q,r" -> owning city
     this.wars = new Set();             // "a,b" (a<b) pairs of civs at war
+    this.wonders = new Map();          // wonder id -> owning civ (one per game)
+    this.wonderBuilt = null;           // {name, owner, you} on the turn one completes
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
@@ -120,6 +123,7 @@ export class Game {
     for (const c of this.barbCamps) c.mesh.visible = this.explored.has(key(c.q, c.r));
     this.updateBorders();
     this.updateDistricts();
+    this.updateWonders();
   }
 
   // Enemy units/cities are only shown when inside the player's current sight.
@@ -174,6 +178,17 @@ export class Game {
       }
     }
     if (this.view.showDistricts) this.view.showDistricts(entries);
+  }
+
+  // A golden spire over every city that holds a world wonder (fog-aware).
+  updateWonders() {
+    const entries = [];
+    for (const c of this.cities) {
+      if (!c.wonders || c.wonders.size === 0) continue;
+      if (c.owner !== 0 && !this.explored.has(key(c.q, c.r))) continue;
+      entries.push({ q: c.q, r: c.r, count: c.wonders.size });
+    }
+    if (this.view.showWonders) this.view.showWonders(entries);
   }
 
   // --- player actions -------------------------------------------------------
@@ -510,6 +525,7 @@ export class Game {
     merge(civ.trait?.effect);
     merge(GOVERNMENTS[civ.government]?.bonus);
     for (const id of civ.policies) merge(POLICIES[id]?.effect);
+    for (const [wid, wowner] of this.wonders) if (wowner === owner) merge(WONDERS[wid]?.effect);
     if (owner !== 0 && this._diff) mods.combat += this._diff.combat; // AI combat handicap
     return mods;
   }
@@ -579,6 +595,10 @@ export class Game {
       if (dist && has && !has.has(dist)) continue; // its district isn't built in this city yet
       items.push({ kind: 'building', id, name: BUILDINGS[id].name, cost: BUILDINGS[id].cost, desc: BUILDINGS[id].desc, district: dist });
     }
+    for (const id of unlockedWonders(researched, new Set(this.wonders.keys()))) {
+      if (WONDERS[id].coastal && city && !this.isCoastal(city)) continue;
+      items.push({ kind: 'wonder', id, name: WONDERS[id].name, cost: WONDERS[id].cost, desc: WONDERS[id].desc, glyph: WONDERS[id].glyph });
+    }
     return items;
   }
 
@@ -625,6 +645,18 @@ export class Game {
   }
 
   _completeBuild(city, item) {
+    if (item.kind === 'wonder') {
+      if (this.wonders.has(item.id)) { // another civ finished it first — refund half
+        this.civs[city.owner].treasury.gold += Math.round(WONDERS[item.id].cost * 0.5);
+        if (city.owner === 0) this.events.push(`${WONDERS[item.id].name} was completed elsewhere — production refunded`);
+        return;
+      }
+      this.wonders.set(item.id, city.owner);
+      city.wonders.add(item.id);
+      this.wonderBuilt = { name: WONDERS[item.id].name, glyph: WONDERS[item.id].glyph, owner: city.owner, you: city.owner === 0, city: city.name };
+      this.events.push(`${city.owner === 0 ? 'You' : this.civs[city.owner].name} completed ${WONDERS[item.id].name}!`);
+      return;
+    }
     if (item.kind === 'district') {
       if (item.tile && city.tiles.has(item.tile)) city.districts.set(item.tile, item.id);
       if (city.owner === 0) this.events.push(`${DISTRICTS[item.id].name} built in ${city.name}`);
@@ -643,6 +675,12 @@ export class Game {
     city.production += this.cityYields(city).prod;
     while (city.queue.length) {
       const item = city.queue[0];
+      if (item.kind === 'wonder' && this.wonders.has(item.id)) { // claimed elsewhere — drop it
+        city.queue.shift();
+        this.civs[city.owner].treasury.gold += Math.round(WONDERS[item.id].cost * 0.25);
+        if (city.owner === 0) this.events.push(`${WONDERS[item.id].name} was claimed by another civ`);
+        continue;
+      }
       const cost = this.itemCost(city.owner, item);
       if (city.production < cost) break;
       if (item.kind === 'unit' && !this._spawnSpot(city, UNIT_TYPES[item.id])) break; // no room — wait
@@ -776,7 +814,7 @@ export class Game {
       cityNameIdx: this.cityNameIdx,
       explored: [...this.explored],
       units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
-      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
+      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
         name: v.name, id: v.id, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
         treasury: { ...v.treasury },
@@ -786,6 +824,7 @@ export class Game {
         policies: [...v.policies],
       })),
       wars: [...this.wars],
+      wonders: [...this.wonders],
       barbCamps: this.barbCamps.map(c => ({ q: c.q, r: c.r })),
       year: this.year,
       age: this.age,
@@ -817,6 +856,7 @@ export class Game {
       city.hp = cd.hp; city.queue = cd.queue || []; city.buildings = new Set(cd.buildings || []);
       city.tiles = cd.tiles ? new Set(cd.tiles) : initialClaim(city, this.tiles, new Map());
       city.districts = new Map(cd.districts || []);
+      city.wonders = new Set(cd.wonders || []);
       city.borderProgress = cd.borderProgress || 0;
       city.placeAt(this.view);
       this.scene.add(city.mesh);
@@ -843,6 +883,7 @@ export class Game {
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);
+    this.wonders = new Map(data.wonders || []);
     for (const cd of (data.barbCamps || [])) this.addBarbCamp(cd.q, cd.r);
     this.difficulty = data.difficulty || 'normal';
     this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
@@ -919,6 +960,7 @@ export class Game {
     this.events = [];
     this.ageAdvanced = null;
     this.ageBonus = null;
+    this.wonderBuilt = null;
     this._runAI();
     this._runBarbarians();
     this._sweepCamps();
@@ -982,6 +1024,7 @@ export class Game {
       const opts = this.buildOptions(owner, c);
       const building = opts.find(o => o.kind === 'building' && !c.buildings.has(o.id));
       const district = opts.find(o => o.kind === 'district');
+      const wonder = opts.find(o => o.kind === 'wonder' && !c.queue.some(i => i.kind === 'wonder'));
       const threatened = this.units.some(e => e.owner !== owner && distance(e, c) <= 5);
       const defended = this.units.some(u => u.owner === owner && u.def.attack && !u.def.canFound && distance(u, c) <= 3);
       if (threatened && !defended) {
@@ -989,6 +1032,8 @@ export class Game {
         else c.queue.push(this._aiItem('unit', this._aiBestUnit(owner)));
       } else if (myCities.length < 3 && mySettlers === 0) {
         c.queue.push(this._aiItem('unit', 'settler'));
+      } else if (wonder && (this.turn + c.q) % 2 === 0) { // sometimes chase a wonder
+        c.queue.push({ kind: 'wonder', id: wonder.id, name: wonder.name, cost: wonder.cost });
       } else if (building) {
         c.queue.push(this._aiItem('building', building.id));
       } else if (district && this.districtSites(c).length) {

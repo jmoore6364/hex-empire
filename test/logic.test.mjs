@@ -7,6 +7,7 @@ import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/territory.js';
 import { DISTRICTS, buildingDistrict, unlockedDistricts } from '../src/districts.js';
+import { WONDERS, unlockedWonders } from '../src/wonders.js';
 import { cityYields } from '../src/economy.js';
 import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
@@ -153,6 +154,14 @@ check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']
   check('districts unlock by tech', unlockedDistricts(new Set(['currency'])).includes('commercial'));
   check('locked districts stay hidden', !unlockedDistricts(new Set()).includes('campus'));
   check('every district lists at least one building', Object.values(DISTRICTS).every(d => d.buildings.length > 0));
+}
+
+// --- wonders ---
+{
+  check('wonders unlock by tech', unlockedWonders(new Set(['masonry'])).includes('pyramids'));
+  check('locked wonders hidden', !unlockedWonders(new Set()).includes('great_library'));
+  check('already-built wonders are excluded', !unlockedWonders(new Set(['masonry']), new Set(['pyramids'])).includes('pyramids'));
+  check('every wonder has an effect & cost', Object.values(WONDERS).every(w => w.effect && w.cost > 0));
 }
 
 // --- territory ownership ---

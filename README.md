@@ -130,6 +130,13 @@ civilizations** spread across the map — who also war with each other.
   policy slots), and **policy cards** you slot into them for empire-wide bonuses
   — +production, +gold, combat strength, cheaper settlers/military, faster
   growth. Effects stack across your government and active policies.
+- **World Wonders** — landmark builds (Pyramids, Hanging Gardens, Great Library,
+  Colossus, Great Wall, Terracotta Army), each **one per game**: the first civ to
+  finish one claims it and gets a permanent **empire-wide bonus** (production,
+  food, science, gold, combat or cheaper military); everyone else loses it and
+  gets a production refund. Completing one fires a global **"A Wonder of the
+  World"** banner, and a **golden spire** rises over the city. The AI races for
+  them too.
 - **Districts** — Civ-style districts you **place on a chosen owned tile**, each
   grouping a category of buildings: the **Campus** (Library, University), the
   **Commercial Hub** (Market, Bank), the **Industrial Zone** (Workshop, Factory)
@@ -228,6 +235,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/pathfinding.js` | A\* and movement-range flood fill — *pure* |
 | `src/tech.js` | Tech tree catalogue & research prerequisites — *pure* |
 | `src/districts.js` | District types & their building groupings — *pure* |
+| `src/wonders.js` | World Wonders catalogue & unlock rules — *pure* |
 | `src/civics.js` | Civics tree, governments & policy cards — *pure* |
 | `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
 | `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |

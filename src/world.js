@@ -393,4 +393,30 @@ export class WorldView {
     }
     for (; i < this.districtPool.length; i++) this.districtPool[i].visible = false;
   }
+
+  // A glowing golden spire over cities holding a world wonder.
+  showWonders(entries) {
+    if (!this.wonderGroup) {
+      this.wonderGroup = new THREE.Group();
+      this.scene.add(this.wonderGroup);
+      this.wonderPool = [];
+      this.wonderGeo = new THREE.ConeGeometry(0.16, 0.7, 5);
+    }
+    let i = 0;
+    for (const e of entries) {
+      const top = this.topOf(e.q, e.r);
+      if (!top) continue;
+      let m = this.wonderPool[i];
+      if (!m) {
+        m = new THREE.Mesh(this.wonderGeo, new THREE.MeshStandardMaterial({ color: 0xf4cf5a, emissive: 0xc89a2a, emissiveIntensity: 0.6, roughness: 0.3, metalness: 0.4 }));
+        m.castShadow = true;
+        this.wonderGroup.add(m);
+        this.wonderPool.push(m);
+      }
+      m.position.set(top.x, top.y + 0.95, top.z);
+      m.visible = true;
+      i++;
+    }
+    for (; i < this.wonderPool.length; i++) this.wonderPool[i].visible = false;
+  }
 }
