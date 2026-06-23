@@ -13,6 +13,7 @@ import { BUILDINGS } from './buildings.js';
 import { DISTRICTS } from './districts.js';
 import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
+import { HealthBars } from './health.js';
 import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
 import { loadUnitModels } from './models.js';
@@ -140,6 +141,7 @@ view.group.traverse(o => { if (o.isMesh) o.receiveShadow = true; });
 const game = new Game(scene, view, saveData ? saveData.civs.length : 1 + NUM_AI, civConfigs,
   saveData ? {} : { difficulty: startOpts.difficulty, turnLimit: startOpts.turnLimit });
 game.fx = new Effects(scene);   // combat animations
+const healthBars = new HealthBars(scene);
 const ui = new UI();
 let researchNudged = false;     // so the "pick a tech" nudge only auto-opens once
 
@@ -628,6 +630,7 @@ window.addEventListener('keydown', (e) => {
 
 // --- render loop -------------------------------------------------------------
 let last = performance.now();
+const hpEntities = []; // reused each frame for the health-bar pass
 function animate(now) {
   const dt = Math.min(0.05, (now - last) / 1000);
   last = now;
@@ -635,6 +638,11 @@ function animate(now) {
   view.animateWater(now / 1000);
   for (const u of game.units) u.update(dt);
   game.fx.update(dt);
+  // Floating HP bars (damaged units & cities only).
+  hpEntities.length = 0;
+  for (const u of game.units) hpEntities.push({ mesh: u.mesh, hp: u.hp, maxHp: u.def.hp, barY: 1.05 });
+  for (const c of game.cities) hpEntities.push({ mesh: c.mesh, hp: c.hp, maxHp: game.cityMaxHp(c), barY: 1.5 });
+  healthBars.update(hpEntities, camera);
   // Carry out a deferred unit-advance once everything has stopped animating.
   if (advancePending && !sceneIsBusy()) {
     const prev = advancePrev;
@@ -663,4 +671,4 @@ checkGameOver();
 
 // Debug / test handle: lets the headless smoke test (and the browser console)
 // inspect live game and camera state.
-window.__hex = { game, view, ui, camRig, saveGame };
+window.__hex = { game, view, ui, camRig, saveGame, healthBars, camera };

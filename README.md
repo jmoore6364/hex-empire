@@ -148,6 +148,9 @@ civilizations** spread across the map — who also war with each other.
   out). It works the best of its tiles by population. Territory is drawn with a
   **crisp owner-coloured border outline** (inset so neighbouring civs' borders sit
   side by side) over a faint colour wash, so who owns what is clear at a glance.
+- **Floating HP bars** — a billboarded health bar appears over any **damaged**
+  unit or city (green → yellow → red by health), and hides again at full HP, so
+  the board stays clean until a fight is on.
 - **Sound effects** — selection, movement, combat, founding, building, research
   and victory/defeat are all **synthesized with the Web Audio API** (no audio
   files — it works offline and adds nothing to the download). Muteable; the
