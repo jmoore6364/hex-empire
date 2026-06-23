@@ -78,7 +78,8 @@ civilizations** spread across the map — who also war with each other.
   Violet Arbalest, Onyx Bombard) and a procedural **heraldic crest** (an SVG
   shield with a trait symbol — waves, crossed swords, leaf, coin, star, cog) shown
   on its card, in the HUD and in the diplomacy panel, plus **settings**: map size
-  (Small/Medium/Large), number of AI opponents (1–4), **difficulty**
+  (Small/Medium/Large/**Huge** — Huge is ~4× the Large map, ~11k tiles), number
+  of AI opponents (1–4), **difficulty**
   (Easy/Normal/Hard — scales AI income & combat), an optional **turn limit**
   (Off/150/250 → score victory), and sound on/off. Your chosen civ sets your
   colour and bonus; the AIs take distinct civs. **Continue** resumes the

@@ -189,11 +189,12 @@ export class WorldView {
   // Shimmer every explored water tile each frame (in-sight ones bright, the rest
   // dimmed like the fog). Cheap: just colour writes over the water-cell list.
   animateWater(time) {
-    if (!this.exploredNow || !this.waterCells) return;
+    if (!this.shimmerCells || !this.shimmerCells.length) return;
+    this._wf = (this._wf || 0) + 1;
+    if (this._wf & 1) return; // ~30fps shimmer — halves the instance-colour upload
     const c = new THREE.Color();
-    for (const { i, k } of this.waterCells) {
-      if (!this.exploredNow.has(k)) continue; // unexplored stays dark
-      const dim = this.visibleNow && this.visibleNow.has(k) ? 1 : 0.45;
+    for (const { i, k } of this.shimmerCells) {
+      const dim = this.visibleNow && this.visibleNow.has(k) ? 1 : 0.8;
       const f = dim * (0.82 + 0.2 * Math.sin(time * 1.3 + i * 0.7));
       this.tileMesh.setColorAt(i, c.copy(this.baseColors[i]).multiplyScalar(f));
     }
@@ -216,6 +217,9 @@ export class WorldView {
       if (mk) mk.visible = explored.has(k);
     }
     if (this.tileMesh.instanceColor) this.tileMesh.instanceColor.needsUpdate = true;
+
+    // Only explored water needs to shimmer — bounds the per-frame cost on big maps.
+    this.shimmerCells = this.waterCells.filter(c => explored.has(c.k));
 
     // Hide trees/peaks on tiles we've never seen.
     for (const deco of (this.decorations || [])) {

@@ -126,6 +126,19 @@ if (startOpts.load) { try { saveData = JSON.parse(localStorage.getItem('hexempir
 const MAP_RADIUS = saveData ? (saveData.radius || 24) : startOpts.radius;
 const NUM_AI = saveData ? Math.max(1, (saveData.civs ? saveData.civs.length : 3) - 1) : startOpts.numAI;
 
+// Size the atmospheric fog and the sun's shadow frustum to the actual map so big
+// maps still fade nicely and cast shadows across the whole board.
+scene.fog.near = MAP_RADIUS * 2.8;
+scene.fog.far = MAP_RADIUS * 8.5;
+{
+  const SH = MAP_RADIUS * 2.4;
+  sun.shadow.camera.left = -SH; sun.shadow.camera.right = SH;
+  sun.shadow.camera.top = SH; sun.shadow.camera.bottom = -SH;
+  sun.shadow.camera.far = MAP_RADIUS * 5 + 60;
+  sun.shadow.camera.updateProjectionMatrix();
+  if (MAP_RADIUS > 40) sun.shadow.mapSize.set(4096, 4096); // sharper shadows over a huge board
+}
+
 // The player's chosen civ sits at slot 0; the AIs take distinct other civs.
 let civConfigs = null;
 if (!saveData) {
