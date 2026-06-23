@@ -234,7 +234,7 @@ musicBtn.addEventListener('click', () => { if (sound.musicOn) sound.stopMusic();
 
 // Research (science) and Civics (culture) tree drawers.
 const researchPanel = new TreePanel(game, {
-  ids: { drawer: 'research', tree: 'tech-tree', current: 'research-current', btn: 'research-btn', close: 'research-close' },
+  ids: { drawer: 'research', tree: 'tech-tree', current: 'research-current', btn: 'research-btn' },
   catalogue: TECHS, canPick: canResearch,
   state: (g) => g.civs[0].research,
   bank: (g) => Math.floor(g.treasury.science),
@@ -243,7 +243,7 @@ const researchPanel = new TreePanel(game, {
   onPick: (id) => { game.setResearchPath(0, id); researchPanel.render(); ui.refreshTopbar(game); },
 });
 const civicsPanel = new TreePanel(game, {
-  ids: { drawer: 'civics', tree: 'civics-tree', current: 'civics-current', btn: 'civics-btn', close: 'civics-close' },
+  ids: { drawer: 'civics', tree: 'civics-tree', current: 'civics-current', btn: 'civics-btn' },
   catalogue: CIVICS, canPick: canCivic,
   state: (g) => g.civs[0].civics,
   bank: (g) => Math.floor(g.civs[0].treasury.culture),
@@ -256,7 +256,7 @@ researchPanel.syncButton();
 civicsPanel.syncButton();
 
 // --- diplomacy panel ---------------------------------------------------------
-const diploPanel = document.getElementById('diplomacy');
+const diploPane = document.getElementById('diplomacy');
 const ownerHex = (o) => '#' + OWNER_COLOR[o].toString(16).padStart(6, '0');
 function renderDiplomacy() {
   let h = '';
@@ -276,7 +276,7 @@ function renderDiplomacy() {
   }));
 }
 // --- standings panel ---------------------------------------------------------
-const standingsPanel = document.getElementById('standings');
+const standPane = document.getElementById('standings');
 function renderStandings() {
   const rows = game.standings().filter(r => r.alive);
   let h = '<div class="strow sthead"><span>#</span><span>Civ</span><span>Score</span><span>Age</span><span>Cities</span><span>⭐</span></div>';
@@ -288,19 +288,36 @@ function renderStandings() {
   document.getElementById('standings-body').innerHTML = h;
 }
 
-function closeDrawers() { researchPanel.close(); civicsPanel.close(); diploPanel.style.display = 'none'; standingsPanel.style.display = 'none'; }
-document.getElementById('research-btn').addEventListener('click', () => { civicsPanel.close(); diploPanel.style.display = 'none'; standingsPanel.style.display = 'none'; });
-document.getElementById('civics-btn').addEventListener('click', () => { researchPanel.close(); diploPanel.style.display = 'none'; standingsPanel.style.display = 'none'; });
-document.getElementById('diplo-btn').addEventListener('click', () => {
-  const wasOpen = diploPanel.style.display !== 'none';
-  closeDrawers();
-  if (!wasOpen) { diploPanel.style.display = 'block'; renderDiplomacy(); }
-});
-document.getElementById('standings-btn').addEventListener('click', () => {
-  const wasOpen = standingsPanel.style.display !== 'none';
-  closeDrawers();
-  if (!wasOpen) { standingsPanel.style.display = 'block'; renderStandings(); }
-});
+// --- unified side drawer (tabs: research / civics / diplomacy / standings) ----
+const sidebar = document.getElementById('sidebar');
+const sideTabs = [...document.querySelectorAll('.side-tab')];
+let activeTab = null;
+function renderTab(tab) {
+  if (tab === 'research') researchPanel.render();
+  else if (tab === 'civics') civicsPanel.render();
+  else if (tab === 'diplomacy') renderDiplomacy();
+  else if (tab === 'standings') renderStandings();
+}
+function setTab(tab) {
+  activeTab = tab;
+  researchPanel[tab === 'research' ? 'open' : 'close']();
+  civicsPanel[tab === 'civics' ? 'open' : 'close']();
+  diploPane.classList.toggle('open', tab === 'diplomacy');
+  standPane.classList.toggle('open', tab === 'standings');
+  sideTabs.forEach(b => b.classList.toggle('active', b.dataset.tab === tab));
+  renderTab(tab);
+}
+function openSidebar(tab) { sidebar.classList.add('open'); setTab(tab); }
+function closeSidebar() { sidebar.classList.remove('open'); }
+const sidebarOpen = () => sidebar.classList.contains('open');
+function toggleTab(tab) { if (sidebarOpen() && activeTab === tab) closeSidebar(); else openSidebar(tab); }
+
+sideTabs.forEach(b => b.addEventListener('click', () => openSidebar(b.dataset.tab)));
+document.getElementById('sidebar-close').addEventListener('click', closeSidebar);
+document.getElementById('research-btn').addEventListener('click', () => toggleTab('research'));
+document.getElementById('civics-btn').addEventListener('click', () => toggleTab('civics'));
+document.getElementById('diplo-btn').addEventListener('click', () => toggleTab('diplomacy'));
+document.getElementById('standings-btn').addEventListener('click', () => toggleTab('standings'));
 
 // Government picker + policy-card slots, rendered into the Civics drawer.
 function renderGovPanel(g) {
@@ -657,16 +674,13 @@ function endTurn() {
   // Research / civics: keep the drawers/buttons current; prompt for a new tech
   // when the research queue runs dry.
   researchPanel.syncButton();
-  if (researchPanel.isOpen) researchPanel.render();
   civicsPanel.syncButton();
-  if (civicsPanel.isOpen) civicsPanel.render();
-  if (diploPanel.style.display !== 'none') renderDiplomacy();
-  if (standingsPanel.style.display !== 'none') renderStandings();
+  if (sidebarOpen()) renderTab(activeTab);
   const r0 = game.civs[0].research;
   const canPick = game.cities.some(c => c.owner === 0) && availableTechs(r0.researched).length > 0;
   if (!r0.queue.length && canPick) {
-    if (ev.some(m => m.startsWith('Researched'))) researchPanel.open();
-    else if (!researchNudged) { researchPanel.open(); researchNudged = true; }
+    if (ev.some(m => m.startsWith('Researched'))) openSidebar('research');
+    else if (!researchNudged) { openSidebar('research'); researchNudged = true; }
   }
 
   saveGame(false); // autosave each turn so a refresh + Load resumes here
@@ -674,7 +688,7 @@ function endTurn() {
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (researchPanel.isOpen) researchPanel.close(); else if (civicsPanel.isOpen) civicsPanel.close(); else if (diploPanel.style.display !== 'none') diploPanel.style.display = 'none'; else if (standingsPanel.style.display !== 'none') standingsPanel.style.display = 'none'; else deselect(); }
+  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (sidebarOpen()) closeSidebar(); else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 

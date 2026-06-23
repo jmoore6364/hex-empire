@@ -13,21 +13,21 @@ export class TreePanel {
   constructor(game, cfg) {
     this.game = game;
     this.cfg = cfg;
-    this.el = document.getElementById(cfg.ids.drawer);
+    this.el = document.getElementById(cfg.ids.drawer); // the pane inside the sidebar
     this.tree = document.getElementById(cfg.ids.tree);
     this.currentEl = document.getElementById(cfg.ids.current);
-    this.btn = document.getElementById(cfg.ids.btn);
-    document.getElementById(cfg.ids.close).addEventListener('click', () => this.close());
-    this.btn.addEventListener('click', () => this.toggle());
+    this.btn = cfg.ids.btn ? document.getElementById(cfg.ids.btn) : null;
     this._layout();
   }
 
+  // The sidebar drives slide in/out; these just toggle this pane's visibility.
   get isOpen() { return this.el.classList.contains('open'); }
   open() { this.el.classList.add('open'); this.render(); }
   close() { this.el.classList.remove('open'); }
   toggle() { if (this.isOpen) this.close(); else this.open(); }
 
   syncButton() {
+    if (!this.btn) return;
     const { catalogue, glyph } = this.cfg;
     const r = this.cfg.state(this.game);
     if (r.queue.length) {
