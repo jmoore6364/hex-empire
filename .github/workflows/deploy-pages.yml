@@ -26,6 +26,15 @@ jobs:
       - uses: actions/checkout@v4
       - name: Run logic tests
         run: npm test
+      - name: Cache-bust module URLs
+        # Stamp the commit SHA onto the entry script and every relative ESM import
+        # so a fresh index.html always pulls matching module files (no stale-JS
+        # mismatch across deploys). 'three' (importmap) and assets are left alone.
+        run: |
+          V="${GITHUB_SHA::8}"
+          echo "Stamping module version v=$V"
+          sed -i "s#\"\./src/main\.js\"#\"./src/main.js?v=$V\"#g" index.html
+          find src -name '*.js' -print0 | xargs -0 sed -i -E "s/(from[[:space:]]+['\"])(\.\.?\/[^'\"]+\.js)(['\"])/\1\2?v=$V\3/g"
       - uses: actions/configure-pages@v5
       - name: Upload site artifact
         uses: actions/upload-pages-artifact@v3
