@@ -17,8 +17,11 @@ export class HealthBars {
   _bar(i) {
     if (this.pool[i]) return this.pool[i];
     const root = new THREE.Group();
-    const bg = new THREE.Mesh(this.bgGeo, new THREE.MeshBasicMaterial({ color: 0x0a0d12, transparent: true, opacity: 0.85, depthTest: false }));
-    const fill = new THREE.Mesh(this.fillGeo, new THREE.MeshBasicMaterial({ color: 0x6fd17f, depthTest: false }));
+    const bg = new THREE.Mesh(this.bgGeo, new THREE.MeshBasicMaterial({ color: 0x0a0d12, transparent: true, opacity: 0.85, depthTest: false, depthWrite: false }));
+    // Fill must also be transparent so it shares the transparent render pass and
+    // renderOrder actually puts it ON TOP of the background (otherwise the opaque
+    // fill draws first and the translucent background paints over it).
+    const fill = new THREE.Mesh(this.fillGeo, new THREE.MeshBasicMaterial({ color: 0x6fd17f, transparent: true, depthTest: false, depthWrite: false }));
     bg.renderOrder = 20; fill.renderOrder = 21;
     fill.position.z = 0.001;
     root.add(bg); root.add(fill);
