@@ -9,6 +9,7 @@ import { TECHS, ERAS, availableTechs, pathTo } from './tech.js';
 import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { DISTRICTS, DISTRICT_COST, buildingDistrict, unlockedDistricts } from './districts.js';
 import { WONDERS, unlockedWonders } from './wonders.js';
+import { GREAT_PEOPLE, gppCost } from './greatpeople.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from './territory.js';
 import { cityYields } from './economy.js';
 import { resolveAttack } from './combat.js';
@@ -49,6 +50,8 @@ export class Game {
     this.wars = new Set();             // "a,b" (a<b) pairs of civs at war
     this.wonders = new Map();          // wonder id -> owning civ (one per game)
     this.wonderBuilt = null;           // {name, owner, you} on the turn one completes
+    this.greatPersonBorn = null;       // {name, glyph, …} on the turn the player earns one
+    this.tradeRoutes = [];             // { from, to } city pairs, for rendering
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
@@ -64,6 +67,7 @@ export class Game {
         id: (cfg && cfg.id) || null,   // civilization id, for unique units
         trait: (cfg && cfg.trait) || null,
         age: 0,                        // most advanced tech era reached
+        gpp: 0, gpEarned: 0, generalTurns: 0, greatPeople: [], // Great People
 
         treasury: { gold: 0, science: 0, culture: 0 },
         research: { researched: new Set(), queue: [] },
@@ -124,6 +128,7 @@ export class Game {
     this.updateBorders();
     this.updateDistricts();
     this.updateWonders();
+    this.updateTradeView();
   }
 
   // Enemy units/cities are only shown when inside the player's current sight.
@@ -273,6 +278,7 @@ export class Game {
     city.tiles = initialClaim(city, this.tiles, this.ownership); // centre + six neighbours
     this._removeUnit(unit);
     this.recomputeOwnership();
+    this._recomputeTrade();
     this.recomputeFog();
     return { ok: true, city };
   }
@@ -353,6 +359,7 @@ export class Game {
     city.food = 0; city.production = 0; city.queue = [];
     if (unit) { unit.enqueuePath([{ q: city.q, r: city.r }], this.view); unit.move = 0; }
     this.recomputeOwnership();
+    this._recomputeTrade();
     this.events.push(newOwner === 0 ? `Captured ${city.name}!` : `${city.name} has fallen!`);
   }
 
@@ -526,6 +533,7 @@ export class Game {
     merge(GOVERNMENTS[civ.government]?.bonus);
     for (const id of civ.policies) merge(POLICIES[id]?.effect);
     for (const [wid, wowner] of this.wonders) if (wowner === owner) merge(WONDERS[wid]?.effect);
+    if (civ.generalTurns > 0) mods.combat += 2; // Great General aura
     if (owner !== 0 && this._diff) mods.combat += this._diff.combat; // AI combat handicap
     return mods;
   }
@@ -549,6 +557,7 @@ export class Game {
       const adj = this.districtAdjacency(city, tk, id);
       for (const k in adj) out[k] = (out[k] || 0) + adj[k];
     }
+    if (city.tradeGold) out.gold += city.tradeGold; // internal trade route
     return out;
   }
 
@@ -808,6 +817,7 @@ export class Game {
     this._processResearch(civ);
     this._processCivics(civ);
     this._advanceAge(owner);
+    this._processGreatPeople(owner);
   }
 
   // A unit that held position recovers HP — most inside a friendly city, some on
@@ -836,6 +846,7 @@ export class Game {
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
         name: v.name, id: v.id, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
+        gpp: v.gpp, gpEarned: v.gpEarned, generalTurns: v.generalTurns, greatPeople: [...(v.greatPeople || [])],
         treasury: { ...v.treasury },
         research: { researched: [...v.research.researched], queue: [...v.research.queue] },
         civics: { researched: [...v.civics.researched], queue: [...v.civics.queue] },
@@ -899,6 +910,7 @@ export class Game {
       if ('id' in cd) v.id = cd.id;
       if ('trait' in cd) v.trait = cd.trait;
       v.age = cd.age || 0;
+      v.gpp = cd.gpp || 0; v.gpEarned = cd.gpEarned || 0; v.generalTurns = cd.generalTurns || 0; v.greatPeople = cd.greatPeople || [];
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);
@@ -909,6 +921,7 @@ export class Game {
     this.turnLimit = data.turnLimit || null;
     this.gameOver = data.gameOver || null;
     this.recomputeOwnership();
+    this._recomputeTrade();
     this.income = this.computeIncome(0);
     this.recomputeFog();
   }
@@ -947,6 +960,7 @@ export class Game {
       cities: this.cities.filter(x => x.owner === o).length,
       tech: c.research.researched.size,
       wonders: [...this.wonders.values()].filter(w => w === o).length,
+      greatPeople: (c.greatPeople || []).length,
       age: ERAS[c.age] || ERAS[0],
     }));
     rows.sort((a, b) => b.score - a.score);
@@ -989,11 +1003,66 @@ export class Game {
     if (owner === 0) { this.age = era; this.ageAdvanced = this.ageName(); this.ageBonus = bonus; this.events.push(`A new age dawns: the ${this.ageName()} Era`); }
   }
 
+  // --- great people ---------------------------------------------------------
+  _processGreatPeople(owner) {
+    const civ = this.civs[owner];
+    if (civ.generalTurns > 0) civ.generalTurns--;
+    const myCities = this.cities.filter(c => c.owner === owner);
+    if (!myCities.length) return;
+    const pop = myCities.reduce((s, c) => s + c.population, 0);
+    civ.gpp = (civ.gpp || 0) + 2 + myCities.length + Math.floor(pop / 4);
+    const cost = gppCost(civ.gpEarned || 0);
+    if (civ.gpp >= cost) {
+      civ.gpp -= cost;
+      const gp = GREAT_PEOPLE[(civ.gpEarned || 0) % GREAT_PEOPLE.length];
+      civ.gpEarned = (civ.gpEarned || 0) + 1;
+      (civ.greatPeople ||= []).push(gp.id);
+      this._applyGreatPerson(owner, gp);
+      if (owner === 0) { this.greatPersonBorn = gp; this.events.push(`${gp.name} born!`); }
+    }
+  }
+
+  _applyGreatPerson(owner, gp) {
+    const civ = this.civs[owner];
+    const scale = 1 + (civ.age || 0) * 0.4;
+    const e = gp.effect;
+    if (e.science) civ.treasury.science += Math.round(e.science * scale);
+    if (e.gold) civ.treasury.gold += Math.round(e.gold * scale);
+    if (e.culture) civ.treasury.culture += Math.round(e.culture * scale);
+    if (e.production) for (const c of this.cities) if (c.owner === owner) c.production += Math.round(e.production * scale);
+    if (e.combatTurns) civ.generalTurns = e.combatTurns;
+  }
+
+  // --- trade routes ---------------------------------------------------------
+  // Each city runs one internal route to the empire's most valuable other city,
+  // adding gold to its yield. Sets city.tradeGold and records pairs for drawing.
+  _recomputeTrade() {
+    this.tradeRoutes = [];
+    for (const c of this.cities) c.tradeGold = 0;
+    for (let owner = 0; owner < this.civs.length; owner++) {
+      const mine = this.cities.filter(c => c.owner === owner);
+      if (mine.length < 2) continue;
+      for (const c of mine) {
+        const to = mine.filter(o => o !== c).sort((a, b) => (b.population - a.population) || (distance(c, a) - distance(c, b)))[0];
+        c.tradeGold = 2 + Math.floor(to.population / 2) + (c.buildings.has('market') ? 2 : 0);
+        this.tradeRoutes.push({ from: c, to });
+      }
+    }
+  }
+
+  updateTradeView() {
+    if (!this.view.showTradeRoutes) return;
+    const ex = (c) => c.owner === 0 || this.explored.has(key(c.q, c.r));
+    this.view.showTradeRoutes(this.tradeRoutes.filter(r => ex(r.from) && ex(r.to)).map(r => ({ from: r.from, to: r.to })));
+  }
+
   endTurn() {
     this.events = [];
     this.ageAdvanced = null;
     this.ageBonus = null;
     this.wonderBuilt = null;
+    this.greatPersonBorn = null;
+    this._recomputeTrade();
     this._runAI();
     this._runBarbarians();
     this._sweepCamps();

@@ -12,6 +12,7 @@ import { CIVICS, canResearch as canCivic, GOVERNMENTS, POLICIES, availableGovern
 import { BUILDINGS } from './buildings.js';
 import { DISTRICTS } from './districts.js';
 import { WONDERS } from './wonders.js';
+import { gppCost } from './greatpeople.js';
 import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
 import { HealthBars } from './health.js';
@@ -292,11 +293,14 @@ function renderDiplomacy() {
 const standPane = document.getElementById('standings');
 function renderStandings() {
   const rows = game.standings().filter(r => r.alive);
-  let h = '<div class="strow sthead"><span>#</span><span>Civ</span><span>Score</span><span>Age</span><span>Cities</span><span>⭐</span></div>';
+  const me = game.civs[0];
+  const cost = gppCost(me.gpEarned || 0);
+  let h = `<div class="gpp-line">✨ Great People: <b>${(me.greatPeople || []).length}</b> born · ${Math.floor(me.gpp || 0)}/${cost} to next</div>`;
+  h += '<div class="strow sthead"><span>#</span><span>Civ</span><span>Score</span><span>Cities</span><span>⭐</span><span>✨</span></div>';
   rows.forEach((r, i) => {
     h += `<div class="strow${r.owner === 0 ? ' me' : ''}"><span>${i + 1}</span>` +
       `<span class="nm">${emblemSVG(r.id, OWNER_COLOR[r.owner], 16)}${r.name}</span>` +
-      `<span>${r.score}</span><span>${r.age}</span><span>${r.cities}</span><span>${r.wonders}</span></div>`;
+      `<span>${r.score}</span><span>${r.cities}</span><span>${r.wonders}</span><span>${r.greatPeople}</span></div>`;
   });
   document.getElementById('standings-body').innerHTML = h;
 }
@@ -676,6 +680,7 @@ function endTurn() {
   game.endTurn();
   ui.refreshTopbar(game);
   if (game.wonderBuilt) showWonderBanner(game.wonderBuilt);
+  else if (game.greatPersonBorn) { const g = game.greatPersonBorn; showBanner('A GREAT PERSON IS BORN', `${g.glyph} ${g.name}`, g.desc); }
   else if (game.ageAdvanced) showEraBanner(game.ageAdvanced, game.ageBonus);
   const ev = game.events;
   const warEv = ev.find(m => /declared war on you/.test(m));

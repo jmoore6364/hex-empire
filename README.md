@@ -134,6 +134,16 @@ civilizations** spread across the map — who also war with each other.
   policy slots), and **policy cards** you slot into them for empire-wide bonuses
   — +production, +gold, combat strength, cheaper settlers/military, faster
   growth. Effects stack across your government and active policies.
+- **Great People** — every civ accrues Great-Person points (from cities &
+  population); at rising thresholds a **Great Person is born** granting a one-time
+  bonus scaled by your age — a **Scientist** (research burst), **Merchant** (gold),
+  **Engineer** (production across your cities), **Artist** (culture) or **General**
+  (+2 combat for 12 turns). The player's birth pops an "A Great Person is Born"
+  banner, and the Standings tab shows points-to-next and a per-civ ✨ count.
+- **Trade routes** — each of your cities runs an internal route to your most
+  valuable other city, adding **gold to its yield** (more with a Market); the
+  routes are drawn as **golden lines** between connected cities. Build more cities
+  to grow your trade network.
 - **World Wonders** — landmark builds (Pyramids, Hanging Gardens, Great Library,
   Colossus, Great Wall, Terracotta Army), each **one per game**: the first civ to
   finish one claims it and gets a permanent **empire-wide bonus** (production,
@@ -244,6 +254,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/tech.js` | Tech tree catalogue & research prerequisites — *pure* |
 | `src/districts.js` | District types & their building groupings — *pure* |
 | `src/wonders.js` | World Wonders catalogue & unlock rules — *pure* |
+| `src/greatpeople.js` | Great People roster & point thresholds — *pure* |
 | `src/civics.js` | Civics tree, governments & policy cards — *pure* |
 | `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
 | `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |

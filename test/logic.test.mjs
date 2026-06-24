@@ -8,6 +8,7 @@ import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.j
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/territory.js';
 import { DISTRICTS, buildingDistrict, unlockedDistricts } from '../src/districts.js';
 import { WONDERS, unlockedWonders } from '../src/wonders.js';
+import { GREAT_PEOPLE, gppCost } from '../src/greatpeople.js';
 import { cityYields } from '../src/economy.js';
 import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
@@ -154,6 +155,13 @@ check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']
   check('districts unlock by tech', unlockedDistricts(new Set(['currency'])).includes('commercial'));
   check('locked districts stay hidden', !unlockedDistricts(new Set()).includes('campus'));
   check('every district lists at least one building', Object.values(DISTRICTS).every(d => d.buildings.length > 0));
+}
+
+// --- great people ---
+{
+  check('great-people cost rises each time', gppCost(0) < gppCost(1) && gppCost(1) < gppCost(2));
+  check('every great person has an effect', GREAT_PEOPLE.every(g => g.effect && Object.keys(g.effect).length > 0));
+  check('great-people roster has variety', GREAT_PEOPLE.length >= 5);
 }
 
 // --- wonders ---

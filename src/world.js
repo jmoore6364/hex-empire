@@ -423,4 +423,30 @@ export class WorldView {
     }
     for (; i < this.wonderPool.length; i++) this.wonderPool[i].visible = false;
   }
+
+  // Golden trade-route lines between connected cities.
+  showTradeRoutes(routes) {
+    if (!this.tradeGroup) {
+      this.tradeGroup = new THREE.Group();
+      this.scene.add(this.tradeGroup);
+      this.tradePool = [];
+      this.tradeMat = new THREE.MeshStandardMaterial({ color: 0xe8c860, emissive: 0x8a6a1a, emissiveIntensity: 0.5, roughness: 0.4 });
+      this.tradeBox = new THREE.BoxGeometry(1, 0.05, 0.07); // unit length along X
+    }
+    let i = 0;
+    for (const r of routes) {
+      const a = this.topOf(r.from.q, r.from.r), b = this.topOf(r.to.q, r.to.r);
+      if (!a || !b) continue;
+      let m = this.tradePool[i];
+      if (!m) { m = new THREE.Mesh(this.tradeBox, this.tradeMat); this.tradeGroup.add(m); this.tradePool.push(m); }
+      const mx = (a.x + b.x) / 2, mz = (a.z + b.z) / 2, my = (a.y + b.y) / 2 + 0.18;
+      const len = Math.hypot(b.x - a.x, b.z - a.z);
+      m.position.set(mx, my, mz);
+      m.rotation.y = -Math.atan2(b.z - a.z, b.x - a.x);
+      m.scale.set(len, 1, 1);
+      m.visible = true;
+      i++;
+    }
+    for (; i < this.tradePool.length; i++) this.tradePool[i].visible = false;
+  }
 }
