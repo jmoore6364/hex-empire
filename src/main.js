@@ -124,7 +124,9 @@ let saveData = null;
 if (startOpts.load) { try { saveData = JSON.parse(localStorage.getItem('hexempire-save') || 'null'); } catch (e) { saveData = null; } }
 
 const MAP_RADIUS = saveData ? (saveData.radius || 24) : startOpts.radius;
-const NUM_AI = saveData ? Math.max(1, (saveData.civs ? saveData.civs.length : 3) - 1) : startOpts.numAI;
+// Cap AI count at the number of distinct civilizations available (no duplicates).
+const NUM_AI = saveData ? Math.max(1, (saveData.civs ? saveData.civs.length : 3) - 1)
+  : Math.min(startOpts.numAI, CIVILIZATIONS.length - 1);
 
 // Size the atmospheric fog and the sun's shadow frustum to the actual map so big
 // maps still fade nicely and cast shadows across the whole board.

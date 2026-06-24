@@ -9,6 +9,9 @@ export const CIVILIZATIONS = [
   { id: 'amber',   name: 'Amber',   color: 0xd49a2e, unique: 'Mercenary', trait: { name: 'Merchants',    desc: '+25% gold',          effect: { goldMul: 1.25 } } },
   { id: 'violet',  name: 'Violet',  color: 0x9b59b6, unique: 'Arbalest',  trait: { name: 'Scholars',     desc: '+25% science',       effect: { sciMul: 1.25 } } },
   { id: 'onyx',    name: 'Onyx',    color: 0x6f8296, unique: 'Bombard',   trait: { name: 'Industrious',  desc: '+15% production',    effect: { prodMul: 1.15 } } },
+  { id: 'jade',    name: 'Jade',    color: 0x27b0a0, unique: 'Pikeman',   trait: { name: 'Builders',     desc: '+12% production',    effect: { prodMul: 1.12 } } },
+  { id: 'rose',    name: 'Rose',    color: 0xd45a8a, unique: 'Hussar',    trait: { name: 'Traders',      desc: '+20% gold',          effect: { goldMul: 1.2 } } },
+  { id: 'indigo',  name: 'Indigo',  color: 0x5560d8, unique: 'Templar',   trait: { name: 'Crusaders',    desc: '+2 combat strength', effect: { combat: 2 } } },
 ];
 
 export const CIV_BY_ID = Object.fromEntries(CIVILIZATIONS.map(c => [c.id, c]));
