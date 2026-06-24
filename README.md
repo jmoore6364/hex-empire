@@ -70,7 +70,7 @@ civilizations** spread across the map — who also war with each other.
 
 **Start menu & setup**
 
-- **Title screen** — a start menu with a **civilization picker** (nine civs, each
+- **Title screen** — a start menu with a **civilization picker** (twelve civs, each
   with its own colour and a unique **trait** — Seafarers −30% settler cost,
   Warmongers +3 combat, Cultivators +15% food, Merchants +25% gold, Scholars
   +25% science, Industrious +15% production) **and a unique unit only that civ can
@@ -79,7 +79,7 @@ civilizations** spread across the map — who also war with each other.
   shield with a trait symbol — waves, crossed swords, leaf, coin, star, cog) shown
   on its card, in the HUD and in the diplomacy panel, plus **settings**: map size
   (Small/Medium/Large/**Huge** — Huge is ~4× the Large map, ~11k tiles), number
-  of AI opponents (1–8, from nine distinct civilizations), **difficulty**
+  of AI opponents (1–11, from twelve distinct civilizations), **difficulty**
   (Easy/Normal/Hard — scales AI income & combat), an optional **turn limit**
   (Off/150/250 → score victory), and sound on/off. Your chosen civ sets your
   colour and bonus; the AIs take distinct civs. **Continue** resumes the

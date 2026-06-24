@@ -40,6 +40,9 @@ export const UNIT_TYPES = {
   pikeman:    { name: 'Pikeman',     move: 2, sight: 2, hp: 34, cost: 28, attack: 11,              onlyCiv: 'jade', requires: 'bronze', build: 'soldier', model: 'robot' },
   hussar:     { name: 'Hussar',      move: 4, sight: 2, hp: 22, cost: 26, attack: 9,               onlyCiv: 'rose', requires: 'animal_husbandry', build: 'horseman' },
   templar:    { name: 'Templar',     move: 2, sight: 2, hp: 32, cost: 30, attack: 13,              onlyCiv: 'indigo', requires: 'iron_working', build: 'soldier', model: 'robot' },
+  phalanx:    { name: 'Phalanx',     move: 2, sight: 2, hp: 36, cost: 30, attack: 10,              onlyCiv: 'ember', requires: 'bronze', build: 'soldier', model: 'robot' },
+  ballista:   { name: 'Ballista',    move: 1, sight: 2, hp: 18, cost: 34, attack: 14, range: 2,    onlyCiv: 'bronze', requires: 'the_wheel', build: 'siege' },
+  slinger:    { name: 'Slinger',     move: 3, sight: 2, hp: 14, cost: 18, attack: 5, range: 2,     onlyCiv: 'lime', build: 'archer' },
 };
 
 // Shared boat hull shown under a land unit while it's embarked at sea.

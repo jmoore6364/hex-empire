@@ -80,7 +80,7 @@ export class Game {
 
     // Barbarians: a neutral hostile faction outside the civs list. Always at war
     // with everyone; raids out of camps scattered in the wilds.
-    this.barbOwner = 9;
+    this.barbOwner = 99; // well above any civ index so it never collides
     OWNER_COLOR[this.barbOwner] = 0x6e4a36;
     this.barbCamps = [];
   }
