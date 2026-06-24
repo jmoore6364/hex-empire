@@ -140,6 +140,18 @@
     #era-banner h2 { font-size: 40px; margin: 0; letter-spacing: 2px;
       background: linear-gradient(180deg, #fff, #d9b85c); -webkit-background-clip: text; background-clip: text; color: transparent; }
     #era-bonus { margin-top: 8px; font-size: 14px; color: #cfe0f5; opacity: 0.9; }
+
+    #choice { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(6,9,14,0.78); backdrop-filter: blur(4px); z-index: 26; pointer-events: auto; }
+    #choice .choice-card { background: rgba(16,22,33,0.97); border: 1px solid rgba(217,184,92,0.5); border-radius: 12px;
+      padding: 22px 26px; max-width: 92vw; width: 420px; box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
+    #choice h2 { font-size: 20px; margin-bottom: 14px; color: #e6d27a; text-align: center; }
+    #choice-options { display: flex; flex-direction: column; gap: 8px; }
+    .choice-opt { display: flex; flex-direction: column; align-items: flex-start; gap: 2px; text-align: left;
+      background: rgba(30,40,55,0.8); border: 1px solid rgba(120,160,210,0.3); border-radius: 8px; padding: 11px 14px; cursor: pointer; color: #dce8f5; }
+    .choice-opt:hover { border-color: #6fd0e8; background: rgba(42,62,84,0.95); }
+    .choice-opt b { font-size: 15px; }
+    .choice-opt span { font-size: 12px; opacity: 0.75; }
     @keyframes eraFade {
       0% { opacity: 0; transform: scale(0.92); }
       12% { opacity: 1; transform: scale(1); }
@@ -282,6 +294,13 @@
   <div id="toast"></div>
 
   <div id="era-banner"><div class="era-card"><div class="era-sub" id="era-sub">A NEW AGE DAWNS</div><h2 id="era-title">—</h2><div id="era-bonus"></div></div></div>
+
+  <div id="choice">
+    <div class="choice-card">
+      <h2 id="choice-title">Choose</h2>
+      <div id="choice-options"></div>
+    </div>
+  </div>
 
   <div id="gameover">
     <div class="go-card">

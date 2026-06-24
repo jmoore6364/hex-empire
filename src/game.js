@@ -10,6 +10,7 @@ import { BUILDINGS, unlockedBuildings } from './buildings.js';
 import { DISTRICTS, DISTRICT_COST, buildingDistrict, unlockedDistricts } from './districts.js';
 import { WONDERS, unlockedWonders } from './wonders.js';
 import { GREAT_PEOPLE, gppCost } from './greatpeople.js';
+import { BELIEFS, RELIGION_NAMES } from './religions.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from './territory.js';
 import { cityYields } from './economy.js';
 import { resolveAttack } from './combat.js';
@@ -68,6 +69,7 @@ export class Game {
         trait: (cfg && cfg.trait) || null,
         age: 0,                        // most advanced tech era reached
         gpp: 0, gpEarned: 0, generalTurns: 0, greatPeople: [], // Great People
+        religion: null,                // { name, belief } once founded
 
         treasury: { gold: 0, science: 0, culture: 0 },
         research: { researched: new Set(), queue: [] },
@@ -530,6 +532,7 @@ export class Game {
       }
     };
     merge(civ.trait?.effect);
+    if (civ.religion) merge(BELIEFS.find(b => b.id === civ.religion.belief)?.effect);
     merge(GOVERNMENTS[civ.government]?.bonus);
     for (const id of civ.policies) merge(POLICIES[id]?.effect);
     for (const [wid, wowner] of this.wonders) if (wowner === owner) merge(WONDERS[wid]?.effect);
@@ -557,7 +560,8 @@ export class Game {
       const adj = this.districtAdjacency(city, tk, id);
       for (const k in adj) out[k] = (out[k] || 0) + adj[k];
     }
-    if (city.tradeGold) out.gold += city.tradeGold; // internal trade route
+    if (city.tradeGold) out.gold += city.tradeGold;       // gold from trade routes
+    if (city.tradeScience) out.science += city.tradeScience; // foreign routes bring knowledge
     return out;
   }
 
@@ -693,7 +697,8 @@ export class Game {
       if (city.owner === 0) this.events.push(`${BUILDINGS[item.id].name} built in ${city.name}`);
     } else {
       const spot = this._spawnSpot(city, UNIT_TYPES[item.id]);
-      this.spawnUnit(item.id, city.owner, spot.q, spot.r);
+      const u = this.spawnUnit(item.id, city.owner, spot.q, spot.r);
+      if (UNIT_TYPES[item.id].canTrade) u.home = { q: city.q, r: city.r }; // Trader remembers its origin
       if (city.owner === 0) this.events.push(`${UNIT_TYPES[item.id].name} trained in ${city.name}`);
     }
   }
@@ -842,11 +847,12 @@ export class Game {
       turn: this.turn,
       cityNameIdx: this.cityNameIdx,
       explored: [...this.explored],
-      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked })),
-      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
+      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked, home: u.home })),
+      cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], religion: c.religion, borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
         name: v.name, id: v.id, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
         gpp: v.gpp, gpEarned: v.gpEarned, generalTurns: v.generalTurns, greatPeople: [...(v.greatPeople || [])],
+        religion: v.religion,
         treasury: { ...v.treasury },
         research: { researched: [...v.research.researched], queue: [...v.research.queue] },
         civics: { researched: [...v.civics.researched], queue: [...v.civics.queue] },
@@ -855,6 +861,7 @@ export class Game {
       })),
       wars: [...this.wars],
       wonders: [...this.wonders],
+      tradeRoutes: this.tradeRoutes.map(r => ({ from: [r.from.q, r.from.r], to: [r.to.q, r.to.r], gold: r.gold, science: r.science, owner: r.owner })),
       barbCamps: this.barbCamps.map(c => ({ q: c.q, r: c.r })),
       year: this.year,
       age: this.age,
@@ -887,6 +894,7 @@ export class Game {
       city.tiles = cd.tiles ? new Set(cd.tiles) : initialClaim(city, this.tiles, new Map());
       city.districts = new Map(cd.districts || []);
       city.wonders = new Set(cd.wonders || []);
+      city.religion = cd.religion || null;
       city.borderProgress = cd.borderProgress || 0;
       city.placeAt(this.view);
       this.scene.add(city.mesh);
@@ -894,7 +902,7 @@ export class Game {
     }
     for (const ud of data.units) {
       const u = this.spawnUnit(ud.type, ud.owner, ud.q, ud.r);
-      u.hp = ud.hp; u.move = ud.move; u.setEmbarked(!!ud.embarked);
+      u.hp = ud.hp; u.move = ud.move; u.setEmbarked(!!ud.embarked); if (ud.home) u.home = ud.home;
     }
     this.civs.forEach((v, i) => {
       const cd = data.civs[i];
@@ -911,10 +919,16 @@ export class Game {
       if ('trait' in cd) v.trait = cd.trait;
       v.age = cd.age || 0;
       v.gpp = cd.gpp || 0; v.gpEarned = cd.gpEarned || 0; v.generalTurns = cd.generalTurns || 0; v.greatPeople = cd.greatPeople || [];
+      v.religion = cd.religion || null;
     });
     this.treasury = this.civs[0].treasury;
     this.wars = new Set(data.wars || []);
     this.wonders = new Map(data.wonders || []);
+    this.tradeRoutes = (data.tradeRoutes || []).map(r => {
+      const from = this.cities.find(c => c.q === r.from[0] && c.r === r.from[1]);
+      const to = this.cities.find(c => c.q === r.to[0] && c.r === r.to[1]);
+      return from && to ? { from, to, gold: r.gold, science: r.science, owner: r.owner } : null;
+    }).filter(Boolean);
     for (const cd of (data.barbCamps || [])) this.addBarbCamp(cd.q, cd.r);
     this.difficulty = data.difficulty || 'normal';
     this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
@@ -1011,6 +1025,7 @@ export class Game {
     if (!myCities.length) return;
     const pop = myCities.reduce((s, c) => s + c.population, 0);
     civ.gpp = (civ.gpp || 0) + 2 + myCities.length + Math.floor(pop / 4);
+    if (owner === 0) return; // the player picks their Great Person (recruitGreatPerson)
     const cost = gppCost(civ.gpEarned || 0);
     if (civ.gpp >= cost) {
       civ.gpp -= cost;
@@ -1018,8 +1033,23 @@ export class Game {
       civ.gpEarned = (civ.gpEarned || 0) + 1;
       (civ.greatPeople ||= []).push(gp.id);
       this._applyGreatPerson(owner, gp);
-      if (owner === 0) { this.greatPersonBorn = gp; this.events.push(`${gp.name} born!`); }
     }
+  }
+
+  // The player has enough points to recruit; they choose which one.
+  gpReady() { const c = this.civs[0]; return (c.gpp || 0) >= gppCost(c.gpEarned || 0); }
+  recruitGreatPerson(gpId) {
+    const civ = this.civs[0];
+    const cost = gppCost(civ.gpEarned || 0);
+    if ((civ.gpp || 0) < cost) return false;
+    const gp = GREAT_PEOPLE.find(g => g.id === gpId);
+    if (!gp) return false;
+    civ.gpp -= cost;
+    civ.gpEarned = (civ.gpEarned || 0) + 1;
+    (civ.greatPeople ||= []).push(gp.id);
+    this._applyGreatPerson(0, gp);
+    this.greatPersonBorn = gp;
+    return true;
   }
 
   _applyGreatPerson(owner, gp) {
@@ -1033,21 +1063,79 @@ export class Game {
     if (e.combatTurns) civ.generalTurns = e.combatTurns;
   }
 
-  // --- trade routes ---------------------------------------------------------
-  // Each city runs one internal route to the empire's most valuable other city,
-  // adding gold to its yield. Sets city.tradeGold and records pairs for drawing.
-  _recomputeTrade() {
-    this.tradeRoutes = [];
-    for (const c of this.cities) c.tradeGold = 0;
-    for (let owner = 0; owner < this.civs.length; owner++) {
-      const mine = this.cities.filter(c => c.owner === owner);
-      if (mine.length < 2) continue;
-      for (const c of mine) {
-        const to = mine.filter(o => o !== c).sort((a, b) => (b.population - a.population) || (distance(c, a) - distance(c, b)))[0];
-        c.tradeGold = 2 + Math.floor(to.population / 2) + (c.buildings.has('market') ? 2 : 0);
-        this.tradeRoutes.push({ from: c, to });
-      }
+  // --- religion -------------------------------------------------------------
+  // A civ may found one religion once it has a place of worship (a Monument or
+  // Amphitheater somewhere).
+  canFoundReligion(owner) {
+    return !this.civs[owner].religion &&
+      this.cities.some(c => c.owner === owner && (c.buildings.has('monument') || c.buildings.has('amphitheater')));
+  }
+
+  foundReligion(owner, beliefId, name) {
+    const civ = this.civs[owner];
+    if (civ.religion) return false;
+    const belief = BELIEFS.find(b => b.id === beliefId) || BELIEFS[0];
+    const used = new Set(this.civs.map(c => c.religion && c.religion.name).filter(Boolean));
+    name = name || RELIGION_NAMES.find(n => !used.has(n)) || `Faith ${owner}`;
+    civ.religion = { name, belief: belief.id };
+    for (const c of this.cities) if (c.owner === owner) c.religion = name; // its cities convert at once
+    this.events.push(`${owner === 0 ? 'You' : civ.name} founded ${name}`);
+    if (owner === 0) this.religionFounded = name;
+    return true;
+  }
+
+  _religionFounder(name) { return this.civs.findIndex(c => c.religion && c.religion.name === name); }
+
+  // Each turn: faith spreads to nearby unconverted cities, and foreign followers
+  // pay their religion's founder a small tithe.
+  _processReligion() {
+    const sources = this.cities.filter(c => c.religion);
+    for (const c of this.cities) {
+      if (c.religion) continue;
+      const near = sources.find(s => distance(s, c) <= 2);
+      if (near) c.religion = near.religion;
     }
+    for (const c of this.cities) {
+      if (!c.religion) continue;
+      const fo = this._religionFounder(c.religion);
+      if (fo >= 0 && fo !== c.owner) this.civs[fo].treasury.gold += 1; // tithe from foreign followers
+    }
+  }
+
+  // --- trade routes (built by Traders) --------------------------------------
+  // Recompute each city's trade yield from its established routes; drop routes
+  // whose cities are gone or who are now at war.
+  _recomputeTrade() {
+    this.tradeRoutes = this.tradeRoutes.filter(r =>
+      this.cities.includes(r.from) && this.cities.includes(r.to) && !this.atWar(r.from.owner, r.to.owner));
+    for (const c of this.cities) { c.tradeGold = 0; c.tradeScience = 0; }
+    for (const r of this.tradeRoutes) { r.from.tradeGold += r.gold; r.from.tradeScience += (r.science || 0); }
+  }
+
+  // Cities a Trader can link to right now: an adjacent city that isn't its home,
+  // owned by you or a civ you're at peace with (and explored if foreign).
+  tradeTargets(trader) {
+    const home = trader.home;
+    return this.cities.filter(c => {
+      if (home && c.q === home.q && c.r === home.r) return false;
+      if (c.owner !== trader.owner && (this.atWar(trader.owner, c.owner) || !this.explored.has(key(c.q, c.r)))) return false;
+      return distance(trader, c) <= 1;
+    });
+  }
+
+  // Establish a route from the Trader's home city to `target`, then spend it.
+  establishRoute(trader, target) {
+    const home = this.cities.find(c => trader.home && c.q === trader.home.q && c.r === trader.home.r);
+    if (!home) return { ok: false, msg: 'Home city is gone' };
+    if (this.tradeRoutes.some(r => r.from === home && r.to === target)) return { ok: false, msg: 'Route already exists' };
+    const foreign = target.owner !== trader.owner;
+    const gold = (foreign ? 4 : 2) + Math.floor(target.population / 2) + (home.buildings.has('market') ? 2 : 0);
+    const science = foreign ? 2 : 0;
+    this.tradeRoutes.push({ from: home, to: target, gold, science, owner: trader.owner });
+    this._recomputeTrade();
+    this._removeUnit(trader);
+    if (trader.owner === 0) this.events.push(`Trade route to ${target.name}: +${gold} gold${science ? ` +${science} science` : ''}`);
+    return { ok: true, msg: `Trade route to ${target.name} established` };
   }
 
   updateTradeView() {
@@ -1062,6 +1150,7 @@ export class Game {
     this.ageBonus = null;
     this.wonderBuilt = null;
     this.greatPersonBorn = null;
+    this.religionFounded = null;
     this._recomputeTrade();
     this._runAI();
     this._runBarbarians();
@@ -1069,6 +1158,7 @@ export class Game {
 
     for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
     this._processEconomy(0); // player economy
+    this._processReligion();
     this.income = this.computeIncome(0);
 
     this.turn++;
@@ -1114,6 +1204,9 @@ export class Game {
     const govs = availableGovernments(civ.civics.researched);
     if (govs.length) civ.government = govs[govs.length - 1];
     this.setPolicies(owner, availablePolicies(civ.civics.researched));
+
+    // Found a religion once it has a place of worship.
+    if (this.canFoundReligion(owner)) this.foundReligion(owner, BELIEFS[(owner + this.turn) % BELIEFS.length].id);
 
     // Diplomacy: pick fights it can win, sue for peace when outmatched.
     this._aiDiplomacy(owner);

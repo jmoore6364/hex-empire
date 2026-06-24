@@ -135,15 +135,21 @@ civilizations** spread across the map — who also war with each other.
   — +production, +gold, combat strength, cheaper settlers/military, faster
   growth. Effects stack across your government and active policies.
 - **Great People** — every civ accrues Great-Person points (from cities &
-  population); at rising thresholds a **Great Person is born** granting a one-time
-  bonus scaled by your age — a **Scientist** (research burst), **Merchant** (gold),
-  **Engineer** (production across your cities), **Artist** (culture) or **General**
-  (+2 combat for 12 turns). The player's birth pops an "A Great Person is Born"
-  banner, and the Standings tab shows points-to-next and a per-civ ✨ count.
-- **Trade routes** — each of your cities runs an internal route to your most
-  valuable other city, adding **gold to its yield** (more with a Market); the
-  routes are drawn as **golden lines** between connected cities. Build more cities
-  to grow your trade network.
+  population). When you have enough, **you choose** which to recruit from a panel —
+  a **Scientist** (research burst), **Merchant** (gold), **Engineer** (production
+  across your cities), **Artist** (culture) or **General** (+2 combat for 12
+  turns); the bonus scales with your age. The Standings tab shows points-to-next
+  and a per-civ ✨ count. (The AI recruits automatically.)
+- **Trade routes** — build a **Trader** in a city and send it to another city —
+  yours *or* a foreign civ you're at peace with — to establish a route that adds
+  **gold to the origin city** every turn (foreign routes pay more and bring
+  **science**). Routes are drawn as **golden lines**; they break if the cities
+  fall or go to war.
+- **Religion** — once a city has a place of worship (Monument), **found a
+  religion** and pick a **belief** for an empire-wide bonus (+gold / science /
+  food / production, or +combat). Your cities convert at once, then the faith
+  **spreads** city to city across the map, and **foreign followers pay you a
+  tithe** in gold. The AI founds religions too.
 - **World Wonders** — landmark builds (Pyramids, Hanging Gardens, Great Library,
   Colossus, Great Wall, Terracotta Army), each **one per game**: the first civ to
   finish one claims it and gets a permanent **empire-wide bonus** (production,
@@ -255,6 +261,7 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/districts.js` | District types & their building groupings — *pure* |
 | `src/wonders.js` | World Wonders catalogue & unlock rules — *pure* |
 | `src/greatpeople.js` | Great People roster & point thresholds — *pure* |
+| `src/religions.js` | Religion beliefs & names — *pure* |
 | `src/civics.js` | Civics tree, governments & policy cards — *pure* |
 | `src/buildings.js` | Building catalogue & yield multipliers — *pure* |
 | `src/territory.js` | City tile ownership (claims, contested-tile resolution) — *pure* |

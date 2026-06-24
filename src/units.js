@@ -13,6 +13,7 @@ export const OWNER_COLOR = [0x3a78d0, 0xd04545, 0x39a86b, 0xd49a2e, 0x9b59b6];
 // `requires` (if set) is the tech id that must be researched to build it.
 export const UNIT_TYPES = {
   settler:    { name: 'Settler',     move: 2, sight: 2, hp: 10, cost: 30, canFound: true, build: 'body' },
+  trader:     { name: 'Trader',      move: 3, sight: 2, hp: 8,  cost: 24, canTrade: true, build: 'body' },
   warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'robot' },
   scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout',   model: 'robot' },
   archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer' },
@@ -278,6 +279,7 @@ export class City {
     this.tiles = new Set();     // owned tile-keys; grows one tile at a time
     this.districts = new Map(); // tile-key -> district id placed there
     this.wonders = new Set();   // world wonders completed here
+    this.religion = null;       // name of the religion this city follows
     this.borderProgress = 0;    // culture banked toward claiming the next tile
     this.ownerMats = [];        // materials recoloured when the city changes hands
     this.mesh = this._build();

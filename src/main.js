@@ -12,7 +12,8 @@ import { CIVICS, canResearch as canCivic, GOVERNMENTS, POLICIES, availableGovern
 import { BUILDINGS } from './buildings.js';
 import { DISTRICTS } from './districts.js';
 import { WONDERS } from './wonders.js';
-import { gppCost } from './greatpeople.js';
+import { gppCost, GREAT_PEOPLE } from './greatpeople.js';
+import { BELIEFS } from './religions.js';
 import { OWNER_COLOR } from './units.js';
 import { Effects } from './effects.js';
 import { HealthBars } from './health.js';
@@ -296,6 +297,11 @@ function renderStandings() {
   const me = game.civs[0];
   const cost = gppCost(me.gpEarned || 0);
   let h = `<div class="gpp-line">✨ Great People: <b>${(me.greatPeople || []).length}</b> born · ${Math.floor(me.gpp || 0)}/${cost} to next</div>`;
+  if (me.religion) {
+    const followers = game.cities.filter(c => c.religion === me.religion.name).length;
+    const belief = BELIEFS.find(b => b.id === me.religion.belief);
+    h += `<div class="gpp-line" style="color:#cbb6f0">☸ ${me.religion.name} — ${belief ? belief.desc : ''} · ${followers} cities</div>`;
+  }
   h += '<div class="strow sthead"><span>#</span><span>Civ</span><span>Score</span><span>Cities</span><span>⭐</span><span>✨</span></div>';
   rows.forEach((r, i) => {
     h += `<div class="strow${r.owner === 0 ? ' me' : ''}"><span>${i + 1}</span>` +
@@ -549,6 +555,19 @@ function refreshUnitPanel() {
       },
     });
   }
+  if (selected.owner === 0 && selected.def.canTrade) {
+    const targets = game.tradeTargets(selected);
+    const to = targets.sort((a, b) => b.population - a.population)[0];
+    actions.push({
+      label: to ? `Trade with ${to.name}` : 'Establish Trade Route',
+      enabled: !!to,
+      onClick: () => {
+        const res = game.establishRoute(selected, to);
+        ui.toast(res.msg, res.ok ? '#e8c860' : '#e88');
+        if (res.ok) { sound.play('city'); game.income = game.computeIncome(); ui.refreshTopbar(game); deselect(); }
+      },
+    });
+  }
   actions.push({ label: 'Skip', enabled: true, onClick: () => cycleToNextActive(selected) });
   ui.showUnit(selected, actions);
 }
@@ -670,6 +689,43 @@ function showEraBanner(name, bonus) {
   showBanner('A NEW AGE DAWNS', `The ${name} Era`,
     bonus ? `Era bonus: +${bonus.gold} gold · +${bonus.science} science · +${bonus.culture} culture` : '');
 }
+// A generic modal: title + a list of {key,label,desc}; calls onPick(key).
+function showChoice(title, options, onPick) {
+  const modal = document.getElementById('choice');
+  document.getElementById('choice-title').textContent = title;
+  const el = document.getElementById('choice-options');
+  el.innerHTML = options.map(o => `<button class="choice-opt" data-key="${o.key}"><b>${o.label}</b><span>${o.desc}</span></button>`).join('');
+  el.querySelectorAll('[data-key]').forEach(b => b.addEventListener('click', () => { modal.style.display = 'none'; onPick(b.dataset.key); }));
+  modal.style.display = 'flex';
+}
+
+// Offer the player their Great Person when points are ready.
+function maybeGreatPerson() {
+  if (!game.gpReady()) return;
+  showChoice('✨ Choose a Great Person', GREAT_PEOPLE.map(g => ({ key: g.id, label: `${g.glyph} ${g.name}`, desc: g.desc })), (id) => {
+    if (game.recruitGreatPerson(id)) {
+      const g = game.greatPersonBorn;
+      showBanner('A GREAT PERSON JOINS YOU', `${g.glyph} ${g.name}`, g.desc);
+      game.income = game.computeIncome(); ui.refreshTopbar(game);
+      if (game.gpReady()) setTimeout(maybeGreatPerson, 1400);
+    }
+  });
+}
+
+// Offer to found a religion the first time the player is eligible.
+let religionPrompted = false;
+function maybeFoundReligion() {
+  if (religionPrompted || !game.canFoundReligion(0)) return;
+  if (document.getElementById('choice').style.display === 'flex') return; // another modal is up
+  religionPrompted = true;
+  showChoice('☸ Found your Religion — choose a belief', BELIEFS.map(b => ({ key: b.id, label: b.name, desc: b.desc })), (id) => {
+    if (game.foundReligion(0, id)) {
+      showBanner('A RELIGION IS FOUNDED', game.civs[0].religion.name, BELIEFS.find(b => b.id === id).desc);
+      game.income = game.computeIncome(); ui.refreshTopbar(game);
+    }
+  });
+}
+
 function showWonderBanner(w) {
   showBanner('A WONDER OF THE WORLD', `${w.glyph} ${w.name}`,
     w.you ? `Completed in ${w.city}` : `Completed by ${game.civs[w.owner].name}`);
@@ -707,6 +763,8 @@ function endTurn() {
   }
 
   saveGame(false); // autosave each turn so a refresh + Load resumes here
+  maybeGreatPerson(); // offer a Great Person if points are ready
+  maybeFoundReligion(); // offer to found a religion if eligible
 }
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {

@@ -9,6 +9,7 @@ import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/
 import { DISTRICTS, buildingDistrict, unlockedDistricts } from '../src/districts.js';
 import { WONDERS, unlockedWonders } from '../src/wonders.js';
 import { GREAT_PEOPLE, gppCost } from '../src/greatpeople.js';
+import { BELIEFS, RELIGION_NAMES } from '../src/religions.js';
 import { cityYields } from '../src/economy.js';
 import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
@@ -162,6 +163,13 @@ check('applyBuildings ignores unknown ids', applyBuildings({ food: 4 }, ['nope']
   check('great-people cost rises each time', gppCost(0) < gppCost(1) && gppCost(1) < gppCost(2));
   check('every great person has an effect', GREAT_PEOPLE.every(g => g.effect && Object.keys(g.effect).length > 0));
   check('great-people roster has variety', GREAT_PEOPLE.length >= 5);
+}
+
+// --- religion ---
+{
+  check('every belief has a civMods-style effect', BELIEFS.every(b => b.effect && Object.keys(b.effect).length > 0));
+  check('enough religion names for many civs', RELIGION_NAMES.length >= 8);
+  check('belief ids are unique', new Set(BELIEFS.map(b => b.id)).size === BELIEFS.length);
 }
 
 // --- wonders ---
