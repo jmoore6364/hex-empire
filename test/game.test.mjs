@@ -219,6 +219,19 @@ function twoCities(game, world, owner = 0) {
   // every unit's `requires` (if any) is a real tech in the expanded tree
   check('every unit gate points at a real tech',
     Object.values(UNIT_TYPES).every(u => !u.requires || TECHS[u.requires]));
+
+  // Every unit type must build its mesh without throwing (catches a bad _build
+  // branch for the units that now have their own meshes).
+  check('every unit type builds a mesh', (() => {
+    const { game, world } = makeGame();
+    const s = findStartTile(world);
+    return Object.keys(UNIT_TYPES).every(type => {
+      try { const u = game.spawnUnit(type, 0, s.q, s.r); return !!u.mesh; } catch (e) { console.error('   build failed for', type, e.message); return false; }
+    });
+  })());
+  check('the new units each have a distinct build (not a reused one)',
+    ['spearman', 'knight', 'cannon', 'rifleman', 'infantry', 'modern_armor', 'bomber', 'jet', 'destroyer', 'battleship']
+      .every(b => Object.values(UNIT_TYPES).some(u => u.build === b)));
   check('the expanded tree adds deeper military units',
     ['spearman', 'knight', 'cannon', 'rifleman', 'infantry', 'modern_armor', 'bomber', 'jet_fighter', 'destroyer', 'battleship'].every(id => UNIT_TYPES[id]));
 

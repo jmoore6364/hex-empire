@@ -26,21 +26,21 @@ export const UNIT_TYPES = {
   artillery:  { name: 'Artillery',   move: 1, sight: 2, hp: 22, cost: 50, attack: 18, range: 3,     requires: 'steel',            build: 'siege' },
   tank:       { name: 'Tank',        move: 3, sight: 3, hp: 60, cost: 72, attack: 24,               requires: 'combustion',       build: 'tank' },
   airplane:   { name: 'Airplane',    move: 6, sight: 4, hp: 30, cost: 64, attack: 18, range: 3,     requires: 'flight',           build: 'plane' },
-  // Deeper land/air units from the expanded tech tree (reuse existing meshes).
-  spearman:   { name: 'Spearman',    move: 2, sight: 2, hp: 24, cost: 22, attack: 8,                requires: 'bronze',           build: 'soldier' },
-  knight:     { name: 'Knight',      move: 4, sight: 2, hp: 30, cost: 36, attack: 14,               requires: 'chivalry',         build: 'horseman' },
-  cannon:     { name: 'Cannon',      move: 1, sight: 2, hp: 22, cost: 46, attack: 17, range: 2,     requires: 'metallurgy',       build: 'siege' },
-  rifleman:   { name: 'Rifleman',    move: 2, sight: 2, hp: 48, cost: 52, attack: 20,               requires: 'rifling',          build: 'soldier', model: 'robot' },
-  infantry:   { name: 'Infantry',    move: 2, sight: 2, hp: 60, cost: 66, attack: 28,               requires: 'plastics',         build: 'soldier', model: 'robot' },
-  modern_armor:{ name: 'Modern Armor', move: 4, sight: 3, hp: 90, cost: 98, attack: 38,             requires: 'computers',        build: 'tank' },
-  bomber:     { name: 'Bomber',      move: 7, sight: 4, hp: 40, cost: 78, attack: 28, range: 3,     requires: 'radio',            build: 'plane' },
-  jet_fighter:{ name: 'Jet Fighter', move: 9, sight: 5, hp: 50, cost: 94, attack: 34, range: 3,     requires: 'rocketry',         build: 'plane' },
+  // Deeper land/air units from the expanded tech tree (each has its own mesh).
+  spearman:   { name: 'Spearman',    move: 2, sight: 2, hp: 24, cost: 22, attack: 8,                requires: 'bronze',           build: 'spearman' },
+  knight:     { name: 'Knight',      move: 4, sight: 2, hp: 30, cost: 36, attack: 14,               requires: 'chivalry',         build: 'knight' },
+  cannon:     { name: 'Cannon',      move: 1, sight: 2, hp: 22, cost: 46, attack: 17, range: 2,     requires: 'metallurgy',       build: 'cannon' },
+  rifleman:   { name: 'Rifleman',    move: 2, sight: 2, hp: 48, cost: 52, attack: 20,               requires: 'rifling',          build: 'rifleman' },
+  infantry:   { name: 'Infantry',    move: 2, sight: 2, hp: 60, cost: 66, attack: 28,               requires: 'plastics',         build: 'infantry' },
+  modern_armor:{ name: 'Modern Armor', move: 4, sight: 3, hp: 90, cost: 98, attack: 38,             requires: 'computers',        build: 'modern_armor' },
+  bomber:     { name: 'Bomber',      move: 7, sight: 4, hp: 40, cost: 78, attack: 28, range: 3,     requires: 'radio',            build: 'bomber' },
+  jet_fighter:{ name: 'Jet Fighter', move: 9, sight: 5, hp: 50, cost: 94, attack: 34, range: 3,     requires: 'rocketry',         build: 'jet' },
 
   // Naval units (domain 'sea') — built only in coastal cities, move on water.
   galley:     { name: 'Galley',      move: 4, sight: 3, hp: 24, cost: 30, attack: 8,                requires: 'sailing',  domain: 'sea', build: 'ship' },
   frigate:    { name: 'Frigate',     move: 5, sight: 3, hp: 34, cost: 50, attack: 16, range: 2,     requires: 'gunpowder', domain: 'sea', build: 'ship' },
-  destroyer:  { name: 'Destroyer',   move: 6, sight: 4, hp: 44, cost: 58, attack: 22, range: 2,     requires: 'navigation', domain: 'sea', build: 'ship' },
-  battleship: { name: 'Battleship',  move: 5, sight: 4, hp: 64, cost: 86, attack: 32, range: 3,     requires: 'ballistics', domain: 'sea', build: 'ship' },
+  destroyer:  { name: 'Destroyer',   move: 6, sight: 4, hp: 44, cost: 58, attack: 22, range: 2,     requires: 'navigation', domain: 'sea', build: 'destroyer' },
+  battleship: { name: 'Battleship',  move: 5, sight: 4, hp: 64, cost: 86, attack: 32, range: 3,     requires: 'ballistics', domain: 'sea', build: 'battleship' },
 
   // Civilization-unique units (`onlyCiv`): a buffed variant only that civ can
   // build, replacing/upgrading a base unit for its play-style.
@@ -170,6 +170,158 @@ export class Unit {
       mast.position.set(0, 0.6, 0); g.add(mast);
       const sail = new THREE.Mesh(new THREE.PlaneGeometry(0.34, 0.4), new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, flatShading: true }));
       sail.position.set(0, 0.62, 0); g.add(sail);
+    } else if (this.def.build === 'spearman') {
+      // foot soldier with a tall spear and a round shield
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.24, 0.52, 6), mat);
+      body.position.y = 0.44; g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), trim);
+      head.position.y = 0.78; g.add(head);
+      const shaft = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 1.05, 4), trim);
+      shaft.position.set(0.22, 0.6, 0); g.add(shaft);
+      const tip = new THREE.Mesh(new THREE.ConeGeometry(0.05, 0.16, 4), trim);
+      tip.position.set(0.22, 1.18, 0); g.add(tip);
+      const shield = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.04, 12), mat);
+      shield.rotation.z = Math.PI / 2; shield.position.set(0.02, 0.5, -0.18); g.add(shield);
+    } else if (this.def.build === 'knight') {
+      // armoured horse (grey barding) + rider in owner colour with a couched lance
+      const barding = new THREE.MeshStandardMaterial({ color: 0xcfcfcf, flatShading: true, roughness: 0.7 });
+      const horse = new THREE.Mesh(new THREE.BoxGeometry(0.52, 0.3, 0.24), barding);
+      horse.position.y = 0.5; g.add(horse);
+      const neck = new THREE.Mesh(new THREE.BoxGeometry(0.16, 0.32, 0.16), barding);
+      neck.position.set(0.28, 0.68, 0); g.add(neck);
+      const hhead = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.14, 0.14), barding);
+      hhead.position.set(0.4, 0.78, 0); g.add(hhead);
+      for (const sx of [-0.18, 0.2]) for (const sz of [-0.09, 0.09]) {
+        const leg = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.045, 0.42, 4), barding);
+        leg.position.set(sx, 0.2, sz); g.add(leg);
+      }
+      const rider = new THREE.Mesh(new THREE.CylinderGeometry(0.11, 0.16, 0.36, 6), mat);
+      rider.position.set(-0.02, 0.86, 0); g.add(rider);
+      const helm = new THREE.Mesh(new THREE.SphereGeometry(0.12, 8, 6), mat);
+      helm.position.set(-0.02, 1.08, 0); g.add(helm);
+      const lance = new THREE.Mesh(new THREE.CylinderGeometry(0.022, 0.022, 1.0, 5), trim);
+      lance.rotation.z = Math.PI / 2; lance.position.set(0.34, 0.92, 0.14); g.add(lance);
+      const pennant = new THREE.Mesh(new THREE.PlaneGeometry(0.16, 0.1), new THREE.MeshStandardMaterial({ color, side: THREE.DoubleSide, flatShading: true }));
+      pennant.position.set(0.72, 1.0, 0.14); g.add(pennant);
+    } else if (this.def.build === 'cannon') {
+      // wheeled gun carriage with a long iron barrel
+      const wood = new THREE.MeshStandardMaterial({ color: 0x6b4f2a, flatShading: true, roughness: 0.85 });
+      const carriage = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.12, 0.3), wood);
+      carriage.position.y = 0.26; g.add(carriage);
+      for (const sz of [-0.2, 0.2]) {
+        const w = new THREE.Mesh(new THREE.CylinderGeometry(0.2, 0.2, 0.06, 12), wood);
+        w.rotation.x = Math.PI / 2; w.position.set(-0.04, 0.22, sz); g.add(w);
+      }
+      const barrel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.09, 0.72, 12), mat);
+      barrel.rotation.z = Math.PI / 2 - 0.18; barrel.position.set(0.08, 0.42, 0); g.add(barrel);
+      const cascabel = new THREE.Mesh(new THREE.SphereGeometry(0.06, 8, 6), mat);
+      cascabel.position.set(-0.26, 0.36, 0); g.add(cascabel);
+    } else if (this.def.build === 'rifleman') {
+      // line infantryman shouldering a rifle
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.22, 0.5, 6), mat);
+      body.position.y = 0.42; g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.14, 8, 6), trim);
+      head.position.y = 0.74; g.add(head);
+      const rifle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.5, 4), trim);
+      rifle.rotation.z = Math.PI / 2; rifle.position.set(0.18, 0.52, 0.12); g.add(rifle);
+    } else if (this.def.build === 'infantry') {
+      // modern soldier: wide helmet and a slung rifle
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.17, 0.22, 0.5, 6), mat);
+      body.position.y = 0.42; g.add(body);
+      const head = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), trim);
+      head.position.y = 0.72; g.add(head);
+      const helm = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.16, 0.06, 10), mat);
+      helm.position.y = 0.8; g.add(helm);
+      const rifle = new THREE.Mesh(new THREE.CylinderGeometry(0.018, 0.018, 0.52, 4), trim);
+      rifle.rotation.z = Math.PI / 2 - 0.5; rifle.position.set(0.16, 0.5, 0.12); g.add(rifle);
+    } else if (this.def.build === 'modern_armor') {
+      // big main battle tank: sloped glacis, long gun, side skirts
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(0.74, 0.24, 0.5), mat);
+      hull.position.y = 0.34; g.add(hull);
+      const glacis = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.22, 0.5), mat);
+      glacis.rotation.z = -Math.PI / 5; glacis.position.set(0.42, 0.34, 0); g.add(glacis);
+      const turret = new THREE.Mesh(new THREE.BoxGeometry(0.42, 0.2, 0.38), mat);
+      turret.position.y = 0.58; g.add(turret);
+      const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.045, 0.05, 0.72, 8), trim);
+      gun.rotation.z = Math.PI / 2; gun.position.set(0.52, 0.6, 0.04); g.add(gun);
+      const aerial = new THREE.Mesh(new THREE.CylinderGeometry(0.012, 0.012, 0.3, 4), trim);
+      aerial.position.set(-0.15, 0.78, -0.12); g.add(aerial);
+      for (const sz of [-0.26, 0.26]) {
+        const tread = new THREE.Mesh(new THREE.BoxGeometry(0.78, 0.16, 0.12), trim);
+        tread.position.set(0, 0.22, sz); g.add(tread);
+        const skirt = new THREE.Mesh(new THREE.BoxGeometry(0.7, 0.1, 0.03), mat);
+        skirt.position.set(0, 0.34, sz + (sz > 0 ? -0.07 : 0.07)); g.add(skirt);
+      }
+    } else if (this.def.build === 'bomber') {
+      // large aircraft: long fuselage, wide wing, twin underslung engines
+      const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.14, 0.95, 8), trim);
+      fus.rotation.z = Math.PI / 2; fus.position.y = 0.85; g.add(fus);
+      const nose = new THREE.Mesh(new THREE.SphereGeometry(0.13, 8, 6), trim);
+      nose.position.set(0.48, 0.85, 0); g.add(nose);
+      const wing = new THREE.Mesh(new THREE.BoxGeometry(0.2, 0.05, 1.2), mat);
+      wing.position.y = 0.85; g.add(wing);
+      for (const sz of [-0.34, 0.34]) {
+        const eng = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.06, 0.22, 8), mat);
+        eng.rotation.z = Math.PI / 2; eng.position.set(0.06, 0.78, sz); g.add(eng);
+      }
+      const tail = new THREE.Mesh(new THREE.BoxGeometry(0.14, 0.22, 0.05), mat);
+      tail.position.set(-0.42, 0.96, 0); g.add(tail);
+      const tailplane = new THREE.Mesh(new THREE.BoxGeometry(0.12, 0.04, 0.5), mat);
+      tailplane.position.set(-0.42, 0.86, 0); g.add(tailplane);
+    } else if (this.def.build === 'jet') {
+      // sleek jet: pointed nose, swept delta wings, tail fin, afterburner nozzle
+      const fus = new THREE.Mesh(new THREE.CylinderGeometry(0.09, 0.12, 0.9, 8), mat);
+      fus.rotation.z = Math.PI / 2; fus.position.y = 0.85; g.add(fus);
+      const nose = new THREE.Mesh(new THREE.ConeGeometry(0.09, 0.34, 8), trim);
+      nose.rotation.z = -Math.PI / 2; nose.position.set(0.6, 0.85, 0); g.add(nose);
+      for (const sz of [-1, 1]) {
+        const wing = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.03, 0.34), mat);
+        wing.position.set(-0.05, 0.84, sz * 0.22); wing.rotation.y = sz * 0.5; g.add(wing);
+      }
+      const fin = new THREE.Mesh(new THREE.BoxGeometry(0.18, 0.22, 0.03), mat);
+      fin.position.set(-0.34, 0.98, 0); g.add(fin);
+      const noz = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.06, 0.12, 8), trim);
+      noz.rotation.z = Math.PI / 2; noz.position.set(-0.48, 0.85, 0); g.add(noz);
+    } else if (this.def.build === 'destroyer') {
+      // grey steel warship: superstructure, funnel, fore & aft gun turrets, no sail
+      const steel = new THREE.MeshStandardMaterial({ color: 0x5f666e, flatShading: true, roughness: 0.7, metalness: 0.2 });
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(0.85, 0.2, 0.32), steel);
+      hull.position.y = 0.2; g.add(hull);
+      const prow = new THREE.Mesh(new THREE.ConeGeometry(0.16, 0.32, 4), steel);
+      prow.rotation.z = -Math.PI / 2; prow.position.set(0.56, 0.2, 0); g.add(prow);
+      const bridge = new THREE.Mesh(new THREE.BoxGeometry(0.26, 0.22, 0.22), mat);
+      bridge.position.set(-0.02, 0.4, 0); g.add(bridge);
+      const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.06, 0.07, 0.2, 8), steel);
+      funnel.position.set(-0.2, 0.42, 0); g.add(funnel);
+      for (const tx of [0.34, -0.36]) {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.1, 0.1, 0.1, 8), steel);
+        base.position.set(tx, 0.33, 0); g.add(base);
+        const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.3, 6), trim);
+        gun.rotation.z = Math.PI / 2; gun.position.set(tx + 0.18, 0.36, 0); g.add(gun);
+      }
+    } else if (this.def.build === 'battleship') {
+      // large warship: tall superstructure, two funnels, three twin-barrel turrets
+      const steel = new THREE.MeshStandardMaterial({ color: 0x4f565e, flatShading: true, roughness: 0.7, metalness: 0.25 });
+      const hull = new THREE.Mesh(new THREE.BoxGeometry(1.0, 0.24, 0.4), steel);
+      hull.position.y = 0.22; g.add(hull);
+      const prow = new THREE.Mesh(new THREE.ConeGeometry(0.2, 0.36, 4), steel);
+      prow.rotation.z = -Math.PI / 2; prow.position.set(0.66, 0.22, 0); g.add(prow);
+      const tower = new THREE.Mesh(new THREE.BoxGeometry(0.22, 0.34, 0.26), mat);
+      tower.position.set(-0.02, 0.5, 0); g.add(tower);
+      const mast = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.3, 4), steel);
+      mast.position.set(-0.02, 0.78, 0); g.add(mast);
+      for (const fx of [-0.22, -0.36]) {
+        const funnel = new THREE.Mesh(new THREE.CylinderGeometry(0.07, 0.08, 0.22, 8), steel);
+        funnel.position.set(fx, 0.45, 0); g.add(funnel);
+      }
+      for (const tx of [0.42, 0.2, -0.5]) {
+        const base = new THREE.Mesh(new THREE.CylinderGeometry(0.12, 0.12, 0.12, 8), steel);
+        base.position.set(tx, 0.36, 0); g.add(base);
+        for (const bz of [-0.05, 0.05]) {
+          const gun = new THREE.Mesh(new THREE.CylinderGeometry(0.025, 0.025, 0.34, 6), trim);
+          gun.rotation.z = Math.PI / 2; gun.position.set(tx + 0.22, 0.39, bz); g.add(gun);
+        }
+      }
     } else { // settler — a little wagon
       const cart = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.34), mat);
       cart.position.y = 0.4; g.add(cart);
