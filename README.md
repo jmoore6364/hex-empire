@@ -140,11 +140,14 @@ civilizations** spread across the map — who also war with each other.
   across your cities), **Artist** (culture) or **General** (+2 combat for 12
   turns); the bonus scales with your age. The Standings tab shows points-to-next
   and a per-civ ✨ count. (The AI recruits automatically.)
-- **Trade routes** — build a **Trader** in a city and send it to another city —
-  yours *or* a foreign civ you're at peace with — to establish a route that adds
-  **gold to the origin city** every turn (foreign routes pay more and bring
-  **science**). Routes are drawn as **golden lines**; they break if the cities
-  fall or go to war.
+- **Trade routes** — build a **Trader** in a city, then pick *any* reachable
+  city — yours *or* a foreign civ you're at peace with — to link to (no longer
+  just an adjacent one). The Trader becomes a **persistent caravan** that shuttles
+  between the two cities, adding **gold to the origin city** every turn (foreign
+  and more distant routes pay more, and foreign routes bring **science**). Routes
+  are drawn as **golden lines**; a route ends if its caravan is destroyed, a city
+  falls, or the two go to war. Select a caravan to **end its route** and free the
+  Trader up for a new one.
 - **Religion** — once a city has a place of worship (Monument), **found a
   religion** and pick a **belief** for an empire-wide bonus (+gold / science /
   food / production, or +combat). Your cities convert at once, then the faith

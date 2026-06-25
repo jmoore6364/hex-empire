@@ -386,6 +386,7 @@ export class Game {
   }
 
   _removeUnit(unit) {
+    if (unit.route) { this.tradeRoutes = this.tradeRoutes.filter(r => r !== unit.route); unit.route = null; this._recomputeTrade(); }
     this.units = this.units.filter(u => u !== unit);
     if (this.fx) this.fx.death(unit.mesh); // play a death animation, then dispose
     else this.scene.remove(unit.mesh);
@@ -847,7 +848,8 @@ export class Game {
       turn: this.turn,
       cityNameIdx: this.cityNameIdx,
       explored: [...this.explored],
-      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked, home: u.home })),
+      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked, home: u.home,
+        route: u.route ? { from: [u.route.from.q, u.route.from.r], to: [u.route.to.q, u.route.to.r] } : undefined, legTo: u.legTo })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], religion: c.religion, borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
         name: v.name, id: v.id, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
@@ -929,6 +931,14 @@ export class Game {
       const to = this.cities.find(c => c.q === r.to[0] && c.r === r.to[1]);
       return from && to ? { from, to, gold: r.gold, science: r.science, owner: r.owner } : null;
     }).filter(Boolean);
+    // Re-link each caravan to the route object it runs (units restored in order).
+    data.units.forEach((ud, i) => {
+      const u = this.units[i];
+      if (u && ud.route) {
+        u.route = this.tradeRoutes.find(r => r.from.q === ud.route.from[0] && r.from.r === ud.route.from[1] && r.to.q === ud.route.to[0] && r.to.r === ud.route.to[1]) || null;
+        u.legTo = ud.legTo || 'to';
+      }
+    });
     for (const cd of (data.barbCamps || [])) this.addBarbCamp(cd.q, cd.r);
     this.difficulty = data.difficulty || 'normal';
     this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
@@ -1110,32 +1120,91 @@ export class Game {
       this.cities.includes(r.from) && this.cities.includes(r.to) && !this.atWar(r.from.owner, r.to.owner));
     for (const c of this.cities) { c.tradeGold = 0; c.tradeScience = 0; }
     for (const r of this.tradeRoutes) { r.from.tradeGold += r.gold; r.from.tradeScience += (r.science || 0); }
+    this.updateTradeView();
   }
 
-  // Cities a Trader can link to right now: an adjacent city that isn't its home,
-  // owned by you or a civ you're at peace with (and explored if foreign).
+  // Cities a Trader can link its home city to: any city other than home that you
+  // own, or are at peace with and have explored. Reachability by land/sea is
+  // checked when the route is actually established (see establishRoute).
   tradeTargets(trader) {
     const home = trader.home;
     return this.cities.filter(c => {
       if (home && c.q === home.q && c.r === home.r) return false;
       if (c.owner !== trader.owner && (this.atWar(trader.owner, c.owner) || !this.explored.has(key(c.q, c.r)))) return false;
-      return distance(trader, c) <= 1;
+      return true;
     });
   }
 
-  // Establish a route from the Trader's home city to `target`, then spend it.
+  // Establish a route from the Trader's home city to `target`. The Trader is NOT
+  // consumed: it becomes a caravan that shuttles between the two cities, and the
+  // route's yield lasts as long as that caravan lives. The route must be
+  // traversable overland/by sea from the home city.
   establishRoute(trader, target) {
     const home = this.cities.find(c => trader.home && c.q === trader.home.q && c.r === trader.home.r);
     if (!home) return { ok: false, msg: 'Home city is gone' };
+    if (target === home) return { ok: false, msg: 'Pick a different city' };
+    if (target.owner !== trader.owner && (this.atWar(trader.owner, target.owner) || !this.explored.has(key(target.q, target.r))))
+      return { ok: false, msg: 'Cannot trade there' };
     if (this.tradeRoutes.some(r => r.from === home && r.to === target)) return { ok: false, msg: 'Route already exists' };
+    // A caravan has to be able to physically reach the target city.
+    if (!findPath(this.tiles, home, target, new Set(), this._moveOpts(trader))) return { ok: false, msg: 'No route to that city' };
     const foreign = target.owner !== trader.owner;
-    const gold = (foreign ? 4 : 2) + Math.floor(target.population / 2) + (home.buildings.has('market') ? 2 : 0);
+    const gold = (foreign ? 4 : 2) + Math.floor(target.population / 2) + Math.floor(distance(home, target) / 4) + (home.buildings.has('market') ? 2 : 0);
     const science = foreign ? 2 : 0;
-    this.tradeRoutes.push({ from: home, to: target, gold, science, owner: trader.owner });
+    const route = { from: home, to: target, gold, science, owner: trader.owner };
+    this.tradeRoutes.push(route);
+    trader.route = route;
+    trader.legTo = 'to'; // head out toward the target first
     this._recomputeTrade();
-    this._removeUnit(trader);
     if (trader.owner === 0) this.events.push(`Trade route to ${target.name}: +${gold} gold${science ? ` +${science} science` : ''}`);
-    return { ok: true, msg: `Trade route to ${target.name} established` };
+    return { ok: true, msg: `Caravan now trading with ${target.name}` };
+  }
+
+  // Disband a caravan's route, turning it back into a free Trader.
+  endRoute(unit) {
+    if (!unit.route) return;
+    this.tradeRoutes = this.tradeRoutes.filter(r => r !== unit.route);
+    unit.route = null; unit.legTo = null;
+    this._recomputeTrade();
+  }
+
+  // Move every caravan one leg of its route. Caravans shuttle between their two
+  // cities forever; a route whose cities are gone or now at war dissolves (its
+  // caravan reverts to a free Trader).
+  _runCaravans() {
+    for (const u of this.units) {
+      if (!u.route) continue;
+      const rt = u.route;
+      if (!this.cities.includes(rt.from) || !this.cities.includes(rt.to) || this.atWar(rt.from.owner, rt.to.owner)) {
+        this.endRoute(u);
+        continue;
+      }
+      let dest = u.legTo === 'from' ? rt.from : rt.to;
+      // A foreign city tile can't be entered, so adjacency counts as arrival —
+      // turn around for the return leg.
+      if (distance(u, dest) <= 1) {
+        u.legTo = u.legTo === 'from' ? 'to' : 'from';
+        dest = u.legTo === 'from' ? rt.from : rt.to;
+      }
+      u.move = u.def.move;
+      const opts = this._moveOpts(u);
+      const reach = reachable(this.tiles, u, u.move, this.occupied(u), opts);
+      let pick = null, bestD = Infinity;
+      for (const k of reach.keys()) {
+        const [q, r] = k.split(',').map(Number);
+        const d = distance({ q, r }, dest);
+        if (d < bestD) { bestD = d; pick = k; }
+      }
+      if (pick) {
+        const [q, r] = pick.split(',').map(Number);
+        const path = findPath(this.tiles, u, { q, r }, this.occupied(u), opts);
+        if (path) {
+          u.enqueuePath(path, this.view);
+          if (u.def.domain !== 'sea') u.setEmbarked(isWater(this.tiles.get(key(u.q, u.r))));
+        }
+      }
+      u.move = 0;
+    }
   }
 
   updateTradeView() {
@@ -1154,6 +1223,7 @@ export class Game {
     this._recomputeTrade();
     this._runAI();
     this._runBarbarians();
+    this._runCaravans();
     this._sweepCamps();
 
     for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
@@ -1240,6 +1310,15 @@ export class Game {
 
     // Movement: settlers expand, others scout/hunt any rival.
     for (const u of this.units.filter(u => u.owner === owner)) {
+      if (u.route) continue; // caravans are driven by _runCaravans
+
+      // A Trader sets up a route to the richest reachable city, then becomes a caravan.
+      if (u.def.canTrade) {
+        if (!u.home) { const h = this.cities.filter(c => c.owner === owner).sort((a, b) => distance(u, a) - distance(u, b))[0]; if (h) u.home = { q: h.q, r: h.r }; }
+        for (const t of this.tradeTargets(u).sort((a, b) => b.population - a.population)) if (this.establishRoute(u, t).ok) break;
+        if (u.route) continue;
+      }
+
       if (u.def.canFound) {
         const tile = this.tiles.get(key(u.q, u.r));
         const crowded = this.cities.some(c => distance(c, u) < 3);

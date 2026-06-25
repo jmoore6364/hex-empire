@@ -408,6 +408,7 @@ let selected = null;
 let selectedCity = null;
 let reachMap = new Map();
 let placing = null; // { city, item } while choosing a tile for a district
+let tradePick = null; // the Trader currently choosing a distant city for a trade route
 
 // Deferred "advance to next unit": set when a unit finishes acting, then carried
 // out by the render loop once movement and combat animations have settled, so
@@ -430,7 +431,7 @@ function selectUnit(u, focus = false) {
   advancePending = false;
   selected = u;
   selectedCity = null;
-  reachMap = game.reachableFor(u);
+  reachMap = u.route ? new Map() : game.reachableFor(u); // caravans move themselves
   view.selectTile(u.q, u.r);
   if (focus) { const top = view.topOf(u.q, u.r); if (top) camRig.focus(top.x, top.z, top.y); }
   refreshUnitPanel();
@@ -452,7 +453,7 @@ function deselect() {
 function nextActiveUnit(after) {
   const units = game.units;
   if (!units.length) return null;
-  const isActive = (u) => u.owner === 0 && u.move > 0 && !u.isMoving;
+  const isActive = (u) => u.owner === 0 && u.move > 0 && !u.isMoving && !u.route; // caravans need no orders
   const start = after ? units.indexOf(after) : -1;
   for (let i = 1; i <= units.length; i++) {
     const u = units[((start + i) % units.length + units.length) % units.length];
@@ -543,6 +544,17 @@ function beginPlaceDistrict(city, item) {
   ui.toast(`Pick a tile for the ${item.name} (Esc to cancel)`, '#9fd0ff');
 }
 
+// Enter trade-target mode: highlight every city this Trader's home can link to.
+// The next city click (in handleClick) establishes the route; the Trader then
+// becomes a caravan that shuttles it.
+function beginPickTrade(trader) {
+  tradePick = trader;
+  const targets = game.tradeTargets(trader);
+  view.clearHighlights();
+  view.showReachable(new Map(targets.map(c => [key(c.q, c.r), true])));
+  ui.toast('Pick a city to trade with (Esc to cancel)', '#e8c860');
+}
+
 function refreshUnitPanel() {
   const actions = [];
   if (selected.owner === 0 && selected.def.canFound) {
@@ -555,17 +567,21 @@ function refreshUnitPanel() {
       },
     });
   }
-  if (selected.owner === 0 && selected.def.canTrade) {
-    const targets = game.tradeTargets(selected);
-    const to = targets.sort((a, b) => b.population - a.population)[0];
+  if (selected.owner === 0 && selected.route) {
     actions.push({
-      label: to ? `Trade with ${to.name}` : 'Establish Trade Route',
-      enabled: !!to,
+      label: `🛑 End route to ${selected.route.to.name}`, enabled: true,
       onClick: () => {
-        const res = game.establishRoute(selected, to);
-        ui.toast(res.msg, res.ok ? '#e8c860' : '#e88');
-        if (res.ok) { sound.play('city'); game.income = game.computeIncome(); ui.refreshTopbar(game); deselect(); }
+        game.endRoute(selected);
+        ui.toast('Trade route ended', '#e8c860');
+        game.income = game.computeIncome(); ui.refreshTopbar(game);
+        reachMap = game.reachableFor(selected); refreshUnitPanel(); drawOverlays(null);
       },
+    });
+  } else if (selected.owner === 0 && selected.def.canTrade) {
+    const targets = game.tradeTargets(selected);
+    actions.push({
+      label: 'Establish Trade Route…', enabled: targets.length > 0,
+      onClick: () => beginPickTrade(selected),
     });
   }
   actions.push({ label: 'Skip', enabled: true, onClick: () => cycleToNextActive(selected) });
@@ -624,6 +640,22 @@ function handleClick(ev) {
     return;
   }
 
+  // Choosing a city for a Trader's route: the click picks the destination.
+  if (tradePick) {
+    const target = game.cityAt(q, r);
+    if (target && game.tradeTargets(tradePick).includes(target)) {
+      const res = game.establishRoute(tradePick, target);
+      ui.toast(res.msg, res.ok ? '#e8c860' : '#e88');
+      if (res.ok) {
+        sound.play('city'); game.income = game.computeIncome(); ui.refreshTopbar(game);
+        tradePick = null; view.clearHighlights(); deselect();
+      }
+    } else {
+      ui.toast('Pick a highlighted city', '#e88');
+    }
+    return;
+  }
+
   const unitHere = game.unitAt(q, r);
   if (unitHere && unitHere.owner === 0 && unitHere !== selected && !unitHere.isMoving) {
     selectUnit(unitHere, true); // center the camera on the tapped unit
@@ -637,7 +669,7 @@ function handleClick(ev) {
     return;
   }
 
-  if (selected && selected.owner === 0 && !selected.isMoving) {
+  if (selected && selected.owner === 0 && !selected.isMoving && !selected.route) {
     const movedUnit = selected;
     const res = game.tryMoveUnit(selected, q, r);
     if (res.ok) {
@@ -769,7 +801,7 @@ function endTurn() {
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
-  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (sidebarOpen()) closeSidebar(); else deselect(); }
+  if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (tradePick) { tradePick = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (sidebarOpen()) closeSidebar(); else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit
 });
 
