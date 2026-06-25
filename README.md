@@ -147,7 +147,9 @@ civilizations** spread across the map — who also war with each other.
   and more distant routes pay more, and foreign routes bring **science**). Routes
   are drawn as **golden lines**; a route ends if its caravan is destroyed, a city
   falls, or the two go to war. Select a caravan to **end its route** and free the
-  Trader up for a new one.
+  Trader up for a new one. Caravans travel exposed, so **raiding an enemy caravan
+  plunders a one-time gold haul** scaled by the route's value — and your own
+  caravans can be plundered in turn.
 - **Religion** — once a city has a place of worship (Monument), **found a
   religion** and pick a **belief** for an empire-wide bonus (+gold / science /
   food / production, or +combat). Your cities convert at once, then the faith

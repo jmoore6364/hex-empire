@@ -313,7 +313,12 @@ export class Game {
       if (this.fx) this.fx.damage(attacker.mesh.position, '-' + res.dmgToAttacker, '#ffd27f');
     }
     attacker.move = 0;
-    if (defender.hp <= 0) { this._removeUnit(defender); msg = `${defender.def.name} destroyed!`; }
+    if (defender.hp <= 0) {
+      let bonus = '';
+      if (defender.route) bonus = ` Plundered +${this._plunderCaravan(attacker, defender)} gold!`;
+      this._removeUnit(defender);
+      msg = `${defender.def.name} destroyed!${bonus}`;
+    }
     if (attacker.hp <= 0) { this._removeUnit(attacker); msg = `${attacker.def.name} lost in battle!`; }
     this.recomputeFog();
     this._checkGameOver();
@@ -1158,6 +1163,17 @@ export class Game {
     this._recomputeTrade();
     if (trader.owner === 0) this.events.push(`Trade route to ${target.name}: +${gold} gold${science ? ` +${science} science` : ''}`);
     return { ok: true, msg: `Caravan now trading with ${target.name}` };
+  }
+
+  // Raiding a caravan hands its killer a one-time gold haul scaled by the value
+  // of the route it was running. Returns the amount looted.
+  _plunderCaravan(attacker, caravan) {
+    const r = caravan.route;
+    const gold = Math.round(15 + (r ? r.gold + (r.science || 0) : 0) * 4);
+    const civ = this.civs[attacker.owner]; // barbarians have no treasury — they just burn it
+    if (civ) civ.treasury.gold += gold;
+    if (caravan.owner === 0 && attacker.owner !== 0) this.events.push(`Your caravan was plundered! ${civ ? civ.name : 'Barbarians'} seized ${gold} gold`);
+    return gold;
   }
 
   // Disband a caravan's route, turning it back into a free Trader.
