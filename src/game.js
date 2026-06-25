@@ -22,7 +22,8 @@ const CITY_NAMES = ['Aurelia', 'Highkeep', 'Rivermouth', 'Stonewatch', 'Greenhol
 const CIV_NAMES = ['Your Empire', 'Crimson', 'Verdant', 'Amber', 'Violet'];
 
 // Years added per turn, by current age (time speeds up as history advances).
-const AGE_YEAR_STEP = [40, 25, 15, 8, 3];
+// One entry per era in tech.js ERAS (Ancient … Information).
+const AGE_YEAR_STEP = [40, 28, 18, 10, 6, 3, 1];
 
 // AI strength by difficulty: `mul` scales AI civ income/production, `combat`
 // adds to AI attack strength.

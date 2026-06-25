@@ -3,7 +3,7 @@
 import { neighbors, distance, hexToWorld, worldToHex, hexMap, key, hexesInRange } from '../src/hex.js';
 import { generateWorld, findStartTile, connectedLand, isWater, TERRAIN } from '../src/worldgen.js';
 import { findPath, reachable } from '../src/pathfinding.js';
-import { TECHS, canResearch, availableTechs, pathTo } from '../src/tech.js';
+import { TECHS, ERAS, canResearch, availableTechs, pathTo } from '../src/tech.js';
 import { BUILDINGS, unlockedBuildings, applyBuildings } from '../src/buildings.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/territory.js';
 import { DISTRICTS, buildingDistrict, unlockedDistricts } from '../src/districts.js';
@@ -287,6 +287,57 @@ check('a Monument adds flat culture', (() => {
   const c = { yields: { food: 1, prod: 1, gold: 0 } };
   return cityYields(c, [], 0, ['monument']).culture === cityYields(c, [], 0, []).culture + 2;
 })());
+
+// --- tech-tree integrity (guards the expanded catalogue) ---
+{
+  const ids = Object.keys(TECHS);
+  check('the tech tree is sizeable', ids.length >= 40);
+  check('every prerequisite is a real tech', ids.every(id => TECHS[id].requires.every(r => TECHS[r])));
+  check('no tech requires itself', ids.every(id => !TECHS[id].requires.includes(id)));
+  check('prerequisites never sit in a later era', ids.every(id => TECHS[id].requires.every(r => TECHS[r].era <= TECHS[id].era)));
+  check('every tech has a name, cost and unlocks label', ids.every(id => TECHS[id].name && TECHS[id].cost > 0 && TECHS[id].unlocks));
+  check('ERAS covers exactly the eras techs use', (() => {
+    const maxEra = Math.max(...ids.map(id => TECHS[id].era));
+    const used = new Set(ids.map(id => TECHS[id].era));
+    return ERAS.length === maxEra + 1 && [...used].every(e => e >= 0 && e < ERAS.length);
+  })());
+  check('every era has at least one tech', ERAS.every((_, e) => ids.some(id => TECHS[id].era === e)));
+
+  // the whole tree is reachable from the roots (no node islanded by a typo)
+  const reachable = new Set();
+  let grew = true;
+  while (grew) {
+    grew = false;
+    for (const id of ids) if (!reachable.has(id) && TECHS[id].requires.every(r => reachable.has(r))) { reachable.add(id); grew = true; }
+  }
+  check('every tech is reachable from the roots (no cycles/orphans)', reachable.size === ids.length);
+
+  // pathTo any tech is a valid topological order ending at that tech
+  check('pathTo every tech is topologically valid', ids.every(id => {
+    const p = pathTo(id, new Set());
+    if (p[p.length - 1] !== id) return false;
+    const idx = Object.fromEntries(p.map((t, i) => [t, i]));
+    return p.every(t => TECHS[t].requires.every(r => idx[r] === undefined || idx[r] < idx[t]));
+  }));
+  // a deep Information-era tech pulls a long chain through every prior era
+  check('a deep tech path spans the whole tree', (() => {
+    const p = pathTo('computers', new Set());
+    const eras = new Set(p.map(id => TECHS[id].era));
+    return p.includes('computers') && eras.size >= 6;
+  })());
+}
+
+// --- content gates point at real techs -------------------------------------
+{
+  const techReq = (cat) => Object.values(cat).map(x => x.requires).filter(r => typeof r === 'string');
+  check('every tech-gated building requires a real tech', techReq(BUILDINGS).every(r => TECHS[r]));
+  check('every wonder requires a real tech', techReq(WONDERS).every(r => TECHS[r]));
+  check('every tech-gated district requires a real tech', techReq(DISTRICTS).every(r => TECHS[r]));
+  check('the expanded building set has the new yield/defense buildings',
+    ['stable', 'harbor', 'castle', 'observatory', 'stock_exchange', 'sewer', 'laboratory', 'power_plant', 'research_lab'].every(id => BUILDINGS[id]));
+  check('new buildings unlock with their tech', unlockedBuildings(new Set(['scientific_method'])).includes('laboratory'));
+  check('the expanded wonder set includes late-era wonders', WONDERS.internet && WONDERS.apollo_program && WONDERS.oracle);
+}
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

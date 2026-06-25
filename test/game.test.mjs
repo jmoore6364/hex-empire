@@ -4,6 +4,8 @@
 // headless smoke test (rendering).
 import { makeGame, foundAt, spawnTrader, runner, key, distance } from './harness.mjs';
 import { findStartTile, connectedLand } from '../src/worldgen.js';
+import { UNIT_TYPES } from '../src/units.js';
+import { TECHS } from '../src/tech.js';
 
 const { check, done } = runner();
 
@@ -210,6 +212,49 @@ function twoCities(game, world, owner = 0) {
   check('endTurn runs without throwing (AI, barbarians, caravans, economy)', !threw);
   check('endTurn advances the turn counter', game.turn === turnBefore + 3);
   check('the caravan survives normal turns', game.units.includes(trader));
+}
+
+// --- tech tree gates units, buildings, wonders -----------------------------
+{
+  // every unit's `requires` (if any) is a real tech in the expanded tree
+  check('every unit gate points at a real tech',
+    Object.values(UNIT_TYPES).every(u => !u.requires || TECHS[u.requires]));
+  check('the expanded tree adds deeper military units',
+    ['spearman', 'knight', 'cannon', 'rifleman', 'infantry', 'modern_armor', 'bomber', 'jet_fighter', 'destroyer', 'battleship'].every(id => UNIT_TYPES[id]));
+
+  const { game, world } = makeGame();
+  const c = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  const civ = game.civs[0];
+
+  const earlyUnits = game.buildOptions(0, c).filter(o => o.kind === 'unit').length;
+  const earlyBuildings = game.buildOptions(0, c).filter(o => o.kind === 'building').length;
+
+  // research the entire tree
+  for (const id of Object.keys(TECHS)) civ.research.researched.add(id);
+  const lateOpts = game.buildOptions(0, c);
+  const lateUnits = lateOpts.filter(o => o.kind === 'unit').length;
+
+  check('researching the tree unlocks many more units', lateUnits > earlyUnits + 6);
+  check('a late-era unit (Modern Armor) becomes buildable', lateOpts.some(o => o.kind === 'unit' && o.id === 'modern_armor'));
+  check('a late wonder (the Internet) becomes available', lateOpts.some(o => o.kind === 'wonder' && o.id === 'internet'));
+
+  // centre buildings (no district) unlock straight from tech
+  check('a Laboratory (centre building) unlocks from its tech',
+    game.buildOptions(0, c).some(o => o.kind === 'building' && o.id === 'laboratory'));
+  check('the science multiplier stacks deep into the tree', game.cityYields(c).science >= 1);
+}
+
+// --- ages advance cleanly across the expanded era list ---------------------
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  const civ = game.civs[0];
+  for (const id of Object.keys(TECHS)) civ.research.researched.add(id);
+  let threw = false;
+  try { game._advanceAge(0); } catch (e) { threw = true; console.error('   _advanceAge threw:', e.message); }
+  check('advancing to the final era does not throw', !threw);
+  check('the player reaches the Information era', game.age === Math.max(...Object.values(TECHS).map(t => t.era)));
+  check('the age name resolves for the top era', typeof game.ageName() === 'string' && game.ageName().length > 0);
 }
 
 done();

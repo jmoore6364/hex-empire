@@ -18,6 +18,17 @@ export const BUILDINGS = {
   university: { name: 'University',  cost: 65,  requires: 'mathematics',       desc: '+50% science',    mult: { science: 1.5 } },
   bank:       { name: 'Bank',       cost: 65,  requires: 'banking',           desc: '+50% gold',       mult: { gold: 1.5 } },
   factory:    { name: 'Factory',    cost: 85,  requires: 'industrialization', desc: '+50% production', mult: { prod: 1.5 } },
+
+  // Expanded tech tree adds more yield/defense buildings deeper in the tree.
+  stable:       { name: 'Stable',        cost: 40,  requires: 'trapping',          desc: '+25% production', mult: { prod: 1.25 } },
+  harbor:       { name: 'Harbor',        cost: 45,  requires: 'sailing',           desc: '+25% food & +25% gold', mult: { food: 1.25, gold: 1.25 } },
+  castle:       { name: 'Castle',        cost: 70,  requires: 'chivalry',          desc: '++ city defense', defense: 2.0 },
+  observatory:  { name: 'Observatory',   cost: 75,  requires: 'astronomy',         desc: '+50% science',    mult: { science: 1.5 } },
+  stock_exchange:{ name: 'Stock Exchange', cost: 110, requires: 'economics',       desc: '+50% gold',       mult: { gold: 1.5 } },
+  sewer:        { name: 'Sewer System',  cost: 95,  requires: 'sanitation',        desc: '+25% food',       mult: { food: 1.25 } },
+  laboratory:   { name: 'Laboratory',    cost: 120, requires: 'scientific_method', desc: '+50% science',    mult: { science: 1.5 } },
+  power_plant:  { name: 'Power Plant',   cost: 130, requires: 'electricity',       desc: '+50% production', mult: { prod: 1.5 } },
+  research_lab: { name: 'Research Lab',  cost: 170, requires: 'computers',         desc: '+75% science',    mult: { science: 1.75 } },
 };
 
 // Building ids unlocked by the civ's researched techs and civics.

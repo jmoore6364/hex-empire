@@ -10,6 +10,12 @@ export const WONDERS = {
   colossus:        { name: 'The Colossus',       glyph: '🗿', cost: 140, requires: 'sailing', coastal: true, desc: '+30% gold (coastal city)', effect: { goldMul: 1.3 } },
   great_wall:      { name: 'The Great Wall',     glyph: '🧱', cost: 150, requires: 'masonry',     desc: '+3 combat strength', effect: { combat: 3 } },
   terracotta_army: { name: 'The Terracotta Army', glyph: '🪖', cost: 170, requires: 'iron_working', desc: '-30% military cost', effect: { militaryDiscount: 0.7 } },
+
+  // Wonders for the deeper tech tree.
+  oracle:          { name: 'The Oracle',         glyph: '🔮', cost: 160, requires: 'philosophy', desc: '+25% science',    effect: { sciMul: 1.25 } },
+  big_ben:         { name: 'Big Ben',            glyph: '🕰️', cost: 320, requires: 'economics',  desc: '+30% gold',       effect: { goldMul: 1.3 } },
+  apollo_program:  { name: 'The Apollo Program', glyph: '🚀', cost: 520, requires: 'rocketry',   desc: '+25% science & +15% production', effect: { sciMul: 1.25, prodMul: 1.15 } },
+  internet:        { name: 'The Internet',       glyph: '🌐', cost: 560, requires: 'computers',  desc: '+40% science',    effect: { sciMul: 1.4 } },
 };
 
 // Wonder ids the civ can attempt, gated by tech (excludes ones already built —

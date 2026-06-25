@@ -123,11 +123,16 @@ civilizations** spread across the map — who also war with each other.
 - **City production queues** — click a city to queue units (and, once unlocked,
   buildings). Production accumulates each turn from the city's prod yield; the
   build menu shows per-item turn estimates and completed units appear by the city.
-- **Tech tree** — a multi-era technology tree (Ancient → Modern, ending at
-  Flight) in its own pop-out drawer with connector lines, à la Civ. Banked
-  science is spent down a **research queue**: click any tech and the full
-  prerequisite path is lined up; a toast and the drawer prompt you to pick the
-  next when one completes. Early techs unlock the buildings below.
+- **Tech tree** — a deep technology tree of **40+ techs across seven eras**
+  (Ancient · Classical · Medieval · Renaissance · Industrial · Modern ·
+  Information) in its own pop-out drawer with connector lines, à la Civ. Each era
+  unlocks new military units (Spearman → Knight → Cannon → Rifleman → Infantry →
+  Modern Armor; Destroyer & Battleship at sea), yield/defense buildings
+  (Harbor, Castle, Observatory, Stock Exchange, Laboratory, Power Plant, Research
+  Lab…) and World Wonders (the Oracle, Big Ben, the Apollo Program, the
+  Internet). Banked science is spent down a **research queue**: click any tech
+  and the full prerequisite path is lined up; a toast and the drawer prompt you
+  to pick the next when one completes.
 - **Civics, governments & policies** — a second **Culture** yield feeds a
   parallel **civics tree** (its own 📜 drawer, same path-queue UI). Civics unlock
   culture buildings (Monument, Amphitheater), **governments** (Chiefdom →

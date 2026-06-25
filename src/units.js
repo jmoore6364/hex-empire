@@ -26,9 +26,21 @@ export const UNIT_TYPES = {
   artillery:  { name: 'Artillery',   move: 1, sight: 2, hp: 22, cost: 50, attack: 18, range: 3,     requires: 'steel',            build: 'siege' },
   tank:       { name: 'Tank',        move: 3, sight: 3, hp: 60, cost: 72, attack: 24,               requires: 'combustion',       build: 'tank' },
   airplane:   { name: 'Airplane',    move: 6, sight: 4, hp: 30, cost: 64, attack: 18, range: 3,     requires: 'flight',           build: 'plane' },
+  // Deeper land/air units from the expanded tech tree (reuse existing meshes).
+  spearman:   { name: 'Spearman',    move: 2, sight: 2, hp: 24, cost: 22, attack: 8,                requires: 'bronze',           build: 'soldier' },
+  knight:     { name: 'Knight',      move: 4, sight: 2, hp: 30, cost: 36, attack: 14,               requires: 'chivalry',         build: 'horseman' },
+  cannon:     { name: 'Cannon',      move: 1, sight: 2, hp: 22, cost: 46, attack: 17, range: 2,     requires: 'metallurgy',       build: 'siege' },
+  rifleman:   { name: 'Rifleman',    move: 2, sight: 2, hp: 48, cost: 52, attack: 20,               requires: 'rifling',          build: 'soldier', model: 'robot' },
+  infantry:   { name: 'Infantry',    move: 2, sight: 2, hp: 60, cost: 66, attack: 28,               requires: 'plastics',         build: 'soldier', model: 'robot' },
+  modern_armor:{ name: 'Modern Armor', move: 4, sight: 3, hp: 90, cost: 98, attack: 38,             requires: 'computers',        build: 'tank' },
+  bomber:     { name: 'Bomber',      move: 7, sight: 4, hp: 40, cost: 78, attack: 28, range: 3,     requires: 'radio',            build: 'plane' },
+  jet_fighter:{ name: 'Jet Fighter', move: 9, sight: 5, hp: 50, cost: 94, attack: 34, range: 3,     requires: 'rocketry',         build: 'plane' },
+
   // Naval units (domain 'sea') — built only in coastal cities, move on water.
   galley:     { name: 'Galley',      move: 4, sight: 3, hp: 24, cost: 30, attack: 8,                requires: 'sailing',  domain: 'sea', build: 'ship' },
   frigate:    { name: 'Frigate',     move: 5, sight: 3, hp: 34, cost: 50, attack: 16, range: 2,     requires: 'gunpowder', domain: 'sea', build: 'ship' },
+  destroyer:  { name: 'Destroyer',   move: 6, sight: 4, hp: 44, cost: 58, attack: 22, range: 2,     requires: 'navigation', domain: 'sea', build: 'ship' },
+  battleship: { name: 'Battleship',  move: 5, sight: 4, hp: 64, cost: 86, attack: 32, range: 3,     requires: 'ballistics', domain: 'sea', build: 'ship' },
 
   // Civilization-unique units (`onlyCiv`): a buffed variant only that civ can
   // build, replacing/upgrading a base unit for its play-style.
