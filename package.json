@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "start": "node server.mjs",
-    "test": "node test/logic.test.mjs"
+    "test": "node test/logic.test.mjs && node test/game.test.mjs"
   },
   "dependencies": {
     "three": "^0.160.1"

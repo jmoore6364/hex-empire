@@ -17,15 +17,29 @@ concurrency:
   cancel-in-progress: false
 
 jobs:
+  # Tests run in their own job (with deps installed) so node_modules never ends
+  # up in the published Pages artifact. Deploy only runs if these pass.
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - name: Install dependencies
+        run: npm ci
+      - name: Run tests (pure logic + game rules)
+        run: npm test
+
   deploy:
+    needs: test
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
-      - name: Run logic tests
-        run: npm test
       - name: Cache-bust module URLs
         # Stamp the commit SHA onto the entry script and every relative ESM import
         # so a fresh index.html always pulls matching module files (no stale-JS

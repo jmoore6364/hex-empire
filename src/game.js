@@ -1129,13 +1129,16 @@ export class Game {
   }
 
   // Cities a Trader can link its home city to: any city other than home that you
-  // own, or are at peace with and have explored. Reachability by land/sea is
-  // checked when the route is actually established (see establishRoute).
+  // own, or are at peace with (and — for the human player — have explored; the
+  // AI knows the whole map). Reachability is checked in establishRoute.
   tradeTargets(trader) {
     const home = trader.home;
     return this.cities.filter(c => {
       if (home && c.q === home.q && c.r === home.r) return false;
-      if (c.owner !== trader.owner && (this.atWar(trader.owner, c.owner) || !this.explored.has(key(c.q, c.r)))) return false;
+      if (c.owner !== trader.owner) {
+        if (this.atWar(trader.owner, c.owner)) return false;
+        if (trader.owner === 0 && !this.explored.has(key(c.q, c.r))) return false;
+      }
       return true;
     });
   }
@@ -1148,8 +1151,10 @@ export class Game {
     const home = this.cities.find(c => trader.home && c.q === trader.home.q && c.r === trader.home.r);
     if (!home) return { ok: false, msg: 'Home city is gone' };
     if (target === home) return { ok: false, msg: 'Pick a different city' };
-    if (target.owner !== trader.owner && (this.atWar(trader.owner, target.owner) || !this.explored.has(key(target.q, target.r))))
-      return { ok: false, msg: 'Cannot trade there' };
+    if (target.owner !== trader.owner) {
+      if (this.atWar(trader.owner, target.owner)) return { ok: false, msg: 'Cannot trade with an enemy' };
+      if (trader.owner === 0 && !this.explored.has(key(target.q, target.r))) return { ok: false, msg: 'Cannot trade there' };
+    }
     if (this.tradeRoutes.some(r => r.from === home && r.to === target)) return { ok: false, msg: 'Route already exists' };
     // A caravan has to be able to physically reach the target city.
     if (!findPath(this.tiles, home, target, new Set(), this._moveOpts(trader))) return { ok: false, msg: 'No route to that city' };

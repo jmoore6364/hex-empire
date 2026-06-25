@@ -22,7 +22,8 @@ Then open the printed URL in a modern browser. If port 5173 is busy the server
 automatically tries the next one and prints the actual address.
 
 ```bash
-npm test         # runs the pure-logic self-tests (hex math, worldgen, pathfinding)
+npm install      # tests need the 'three' dependency (the app itself vendors it)
+npm test         # pure-logic self-tests + headless game-rule tests (combat, trade, AI, save/load)
 ```
 
 ## How to play
@@ -285,13 +286,16 @@ Pure game logic is kept free of Three.js so it can be unit-tested in Node:
 | `src/main.js` | Bootstrap: scene, lights, input, render loop |
 | `server.mjs` | Zero-dependency static server |
 | `test/logic.test.mjs` | Self-tests for the pure modules |
+| `test/game.test.mjs` | Game-rule tests: real `Game` driven in Node with a stubbed renderer |
+| `test/harness.mjs` | Shared test helpers (builds a `Game` with stub scene/view) |
 | `test/smoke.mjs` | Optional headless e2e (drives the app in Edge/Chromium via CDP) |
 
 ## Deploying
 
 The game is a static, no-build ES-module site hosted on **GitHub Pages**. Every
 push to `main` triggers `.github/workflows/deploy-pages.yml`, which runs the
-logic tests and then publishes the repo root. Three.js is vendored as a single
+test suite (a `test` job installs deps and runs `npm test`; `deploy` only runs if
+it passes) and then publishes the repo root. Three.js is vendored as a single
 file (`vendor/three.module.js`) and referenced with a relative path, so the site
 works under the project's `/hex-empire/` base path with no CDN dependency.
 
