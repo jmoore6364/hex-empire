@@ -11,7 +11,7 @@ import { WONDERS, unlockedWonders } from '../src/wonders.js';
 import { GREAT_PEOPLE, gppCost } from '../src/greatpeople.js';
 import { BELIEFS, RELIGION_NAMES } from '../src/religions.js';
 import { cityYields } from '../src/economy.js';
-import { canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
+import { CIVICS, GOVERNMENTS, POLICIES, ERAS as CIVIC_ERAS, canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
 import { defenseMultiplier, resolveAttack } from '../src/combat.js';
 
@@ -337,6 +337,56 @@ check('a Monument adds flat culture', (() => {
     ['stable', 'harbor', 'castle', 'observatory', 'stock_exchange', 'sewer', 'laboratory', 'power_plant', 'research_lab'].every(id => BUILDINGS[id]));
   check('new buildings unlock with their tech', unlockedBuildings(new Set(['scientific_method'])).includes('laboratory'));
   check('the expanded wonder set includes late-era wonders', WONDERS.internet && WONDERS.apollo_program && WONDERS.oracle);
+}
+
+// --- civics tree, governments & policies (guards the expanded set) ---
+{
+  const ids = Object.keys(CIVICS);
+  check('the civics tree is sizeable', ids.length >= 20);
+  check('every civic prerequisite is a real civic', ids.every(id => CIVICS[id].requires.every(r => CIVICS[r])));
+  check('no civic requires itself', ids.every(id => !CIVICS[id].requires.includes(id)));
+  check('civic prerequisites never sit in a later era', ids.every(id => CIVICS[id].requires.every(r => CIVICS[r].era <= CIVICS[id].era)));
+  check('every civic has a name, cost and unlocks label', ids.every(id => CIVICS[id].name && CIVICS[id].cost > 0 && CIVICS[id].unlocks));
+  check('civic ERAS covers exactly the eras civics use', (() => {
+    const maxEra = Math.max(...ids.map(id => CIVICS[id].era));
+    return CIVIC_ERAS.length === maxEra + 1;
+  })());
+  check('every civic era has at least one civic', CIVIC_ERAS.every((_, e) => ids.some(id => CIVICS[id].era === e)));
+  // whole tree reachable from the roots
+  const reach = new Set(); let grew = true;
+  while (grew) { grew = false; for (const id of ids) if (!reach.has(id) && CIVICS[id].requires.every(r => reach.has(r))) { reach.add(id); grew = true; } }
+  check('every civic is reachable from the roots (no cycles/orphans)', reach.size === ids.length);
+  check('civicPath every civic is topologically valid', ids.every(id => {
+    const p = civicPath(id, new Set());
+    if (p[p.length - 1] !== id) return false;
+    const idx = Object.fromEntries(p.map((t, i) => [t, i]));
+    return p.every(t => CIVICS[t].requires.every(r => idx[r] === undefined || idx[r] < idx[t]));
+  }));
+
+  // governments
+  const govs = Object.keys(GOVERNMENTS);
+  check('there are many governments to choose from', govs.length >= 8);
+  check('exactly one government is available from the start', govs.filter(id => !GOVERNMENTS[id].civic).length === 1);
+  check('every other government is gated by a real civic', govs.every(id => !GOVERNMENTS[id].civic || CIVICS[GOVERNMENTS[id].civic]));
+  check('every government defines all three slot categories', govs.every(id => {
+    const s = GOVERNMENTS[id].slots; return ['mil', 'eco', 'wild'].every(k => Number.isInteger(s[k]) && s[k] >= 0);
+  }));
+  check('some governments provide wildcard slots', govs.some(id => GOVERNMENTS[id].slots.wild > 0));
+
+  // policies
+  const pols = Object.keys(POLICIES);
+  check('there are many policy cards', pols.length >= 18);
+  check('every policy is unlocked by a real civic', pols.every(id => CIVICS[POLICIES[id].civic]));
+  check('every policy slot is mil/eco/wild', pols.every(id => ['mil', 'eco', 'wild'].includes(POLICIES[id].slot)));
+  check('every policy has an effect with a known modifier key', pols.every(id => {
+    const e = POLICIES[id].effect; const keys = Object.keys(e || {});
+    return keys.length && keys.every(k => k === 'combat' || k.endsWith('Mul') || k.endsWith('Discount'));
+  }));
+  check('policies span all three slot types', ['mil', 'eco', 'wild'].every(s => pols.some(id => POLICIES[id].slot === s)));
+
+  // wiring sanity against the catalogue
+  check('researching every civic unlocks every policy', availablePolicies(new Set(ids)).length === pols.length);
+  check('researching every civic unlocks every gated government', availableGovernments(new Set(ids)).length === govs.length);
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

@@ -134,12 +134,16 @@ civilizations** spread across the map — who also war with each other.
   and the full prerequisite path is lined up; a toast and the drawer prompt you
   to pick the next when one completes.
 - **Civics, governments & policies** — a second **Culture** yield feeds a
-  parallel **civics tree** (its own 📜 drawer, same path-queue UI). Civics unlock
-  culture buildings (Monument, Amphitheater), **governments** (Chiefdom →
-  Autocracy → Republic → Democracy, each with an inherent bonus and a set of
-  policy slots), and **policy cards** you slot into them for empire-wide bonuses
-  — +production, +gold, combat strength, cheaper settlers/military, faster
-  growth. Effects stack across your government and active policies.
+  parallel **civics tree** of **24 civics across seven eras** (its own 📜 drawer,
+  same path-queue UI). Civics unlock culture buildings (Monument, Amphitheater),
+  **10 governments** — Chiefdom, Autocracy, Oligarchy, Monarchy, Theocracy,
+  Republic, Merchant Republic, Democracy, Communism, Fascism — each with an
+  inherent bonus and its own mix of **military / economic / wildcard** policy
+  slots, and **22 policy cards** you slot into them for empire-wide bonuses
+  (+production, +gold, +science, combat strength, cheaper settlers/military,
+  faster growth). A wildcard slot accepts any card; effects stack across your
+  government and active policies, so the government you choose shapes which
+  policies you can run.
 - **Great People** — every civ accrues Great-Person points (from cities &
   population). When you have enough, **you choose** which to recruit from a panel —
   a **Scientist** (research burst), **Merchant** (gold), **Engineer** (production

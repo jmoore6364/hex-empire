@@ -6,6 +6,7 @@ import { makeGame, foundAt, spawnTrader, runner, key, distance } from './harness
 import { findStartTile, connectedLand } from '../src/worldgen.js';
 import { UNIT_TYPES } from '../src/units.js';
 import { TECHS } from '../src/tech.js';
+import { CIVICS, GOVERNMENTS, POLICIES } from '../src/civics.js';
 
 const { check, done } = runner();
 
@@ -268,6 +269,53 @@ function twoCities(game, world, owner = 0) {
   check('advancing to the final era does not throw', !threw);
   check('the player reaches the Information era', game.age === Math.max(...Object.values(TECHS).map(t => t.era)));
   check('the age name resolves for the top era', typeof game.ageName() === 'string' && game.ageName().length > 0);
+}
+
+// --- governments & policy slots ---------------------------------------------
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  const civ = game.civs[0];
+
+  // unlock the whole civics tree so every government/policy is available
+  for (const id of Object.keys(CIVICS)) civ.civics.researched.add(id);
+
+  // Adopt a government with limited slots, then try to slot more cards than fit.
+  game.setGovernment(0, 'chiefdom'); // mil 1, eco 1, wild 0
+  game.setPolicies(0, ['discipline', 'maneuver', 'urban_planning', 'public_works', 'inspiration']);
+  const slots = GOVERNMENTS.chiefdom.slots;
+  check('setPolicies respects the military slot count', civ.policies.filter(p => POLICIES[p].slot === 'mil').length <= slots.mil);
+  check('setPolicies respects the economic slot count', civ.policies.filter(p => POLICIES[p].slot === 'eco').length <= slots.eco);
+  check('a wildcard policy cannot slot when there are no wild slots', !civ.policies.includes('inspiration'));
+
+  // A government with wildcard slots lets a wildcard card (or overflow) fit.
+  game.setGovernment(0, 'theocracy'); // mil 1, eco 1, wild 2
+  game.setPolicies(0, ['discipline', 'urban_planning', 'inspiration', 'scientific_academy']);
+  check('wildcard slots accept wildcard policies', civ.policies.includes('inspiration') && civ.policies.includes('scientific_academy'));
+
+  // Switching to a tighter government re-trims overflow policies.
+  game.setGovernment(0, 'chiefdom');
+  check('switching government re-fits policies to the new slots',
+    civ.policies.length <= slots.mil + slots.eco + slots.wild);
+
+  // Government bonus + an active policy both fold into civMods.
+  game.setGovernment(0, 'democracy'); // +15% science
+  const mods = game.civMods(0);
+  check('a government bonus reaches civMods', mods.sciMul > 1);
+  game.setPolicies(0, ['discipline']);
+  check('an active military policy adds combat in civMods', game.civMods(0).combat >= 2);
+
+  // The AI also adopts a government and fills policy slots without throwing.
+  const { game: g2, world: w2 } = makeGame();
+  foundAt(g2, 1, findStartTile(w2).q, findStartTile(w2).r);
+  for (const id of Object.keys(CIVICS)) g2.civs[1].civics.researched.add(id);
+  let threw = false;
+  try { g2._runAICiv(1); } catch (e) { threw = true; console.error('   AI civics threw:', e.message); }
+  check('the AI adopts a government & policies cleanly', !threw && !!GOVERNMENTS[g2.civs[1].government]);
+  check('the AI never over-fills its policy slots', (() => {
+    const s = GOVERNMENTS[g2.civs[1].government].slots;
+    return g2.civs[1].policies.length <= s.mil + s.eco + s.wild;
+  })());
 }
 
 done();

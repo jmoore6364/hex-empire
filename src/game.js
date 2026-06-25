@@ -763,7 +763,9 @@ export class Game {
   currentCivic(owner) { return this.civs[owner].civics.queue[0] || null; }
 
   setGovernment(owner, govId) {
-    if (availableGovernments(this.civs[owner].civics.researched).includes(govId)) this.civs[owner].government = govId;
+    if (!availableGovernments(this.civs[owner].civics.researched).includes(govId)) return;
+    this.civs[owner].government = govId;
+    this.setPolicies(owner, this.civs[owner].policies); // re-fit cards to the new slots
   }
 
   // Adopt a set of policy cards, keeping only unlocked cards that fit the

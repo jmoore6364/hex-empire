@@ -365,7 +365,7 @@ function renderGovPanel(g) {
   if (!unlocked.length) h += `<span style="opacity:.6">Research civics to unlock policy cards.</span>`;
   for (const id of unlocked) {
     const p = POLICIES[id];
-    const icon = p.slot === 'mil' ? '⚔' : '💰';
+    const icon = p.slot === 'mil' ? '⚔' : p.slot === 'wild' ? '✷' : '💰';
     h += `<button class="pol${civ.policies.includes(id) ? ' active' : ''}" data-pol="${id}" title="${p.desc}">${icon} ${p.name}</button>`;
   }
   h += `</div>`;
