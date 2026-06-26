@@ -8,13 +8,13 @@ build an economy, and fight rival AI civilizations for the map.
 
 No install needed — works on desktop and touch (drag to pan, pinch to zoom).
 
-![status](https://img.shields.io/badge/status-pass%203%20in%20progress-brightgreen)
+![status](https://img.shields.io/badge/status-pass%203%20complete-brightgreen)
 [![deploy](https://github.com/jmoore6364/hex-empire/actions/workflows/deploy-pages.yml/badge.svg)](https://github.com/jmoore6364/hex-empire/actions/workflows/deploy-pages.yml)
 
 ## Run it locally
 
 ```bash
-npm install      # installs three (already done if node_modules exists)
+npm install      # installs Three.js (the app vendors its own copy; this is for the tests)
 npm start        # serves at http://localhost:5173
 ```
 
@@ -22,8 +22,7 @@ Then open the printed URL in a modern browser. If port 5173 is busy the server
 automatically tries the next one and prints the actual address.
 
 ```bash
-npm install      # tests need the 'three' dependency (the app itself vendors it)
-npm test         # pure-logic self-tests + headless game-rule tests (combat, trade, AI, save/load)
+npm test         # pure-logic self-tests + headless game-rule tests (combat, trade, civics, AI, save/load)
 ```
 
 ## How to play
@@ -72,11 +71,13 @@ civilizations** spread across the map — who also war with each other.
 **Start menu & setup**
 
 - **Title screen** — a start menu with a **civilization picker** (twelve civs, each
-  with its own colour and a unique **trait** — Seafarers −30% settler cost,
+  with its own colour, a unique **trait** (e.g. Seafarers −30% settler cost,
   Warmongers +3 combat, Cultivators +15% food, Merchants +25% gold, Scholars
-  +25% science, Industrious +15% production) **and a unique unit only that civ can
-  build** (Azure Longship, Crimson Berserker, Verdant Ranger, Amber Mercenary,
-  Violet Arbalest, Onyx Bombard) and a procedural **heraldic crest** (an SVG
+  +25% science, Industrious +15% production, plus Builders, Traders, Crusaders,
+  Smiths, Stonemasons and Farmers) **and a unique unit only that civ can build**
+  (Azure Longship, Crimson Berserker, Verdant Ranger, Amber Mercenary, Violet
+  Arbalest, Onyx Bombard, Jade Pikeman, Rose Hussar, Indigo Templar, Ember
+  Phalanx, Bronze Ballista, Lime Slinger) and a procedural **heraldic crest** (an SVG
   shield with a trait symbol — waves, crossed swords, leaf, coin, star, cog) shown
   on its card, in the HUD and in the diplomacy panel, plus **settings**: map size
   (Small/Medium/Large/**Huge** — Huge is ~4× the Large map, ~11k tiles), number
@@ -91,9 +92,9 @@ civilizations** spread across the map — who also war with each other.
 
 - **Year & age** — the HUD tracks a **calendar year** (from 4000 BC, advancing
   each turn — faster as history accelerates) and the empire's **age** (Ancient →
-  Classical → Medieval → Industrial → Modern), derived from your most advanced
-  tech, with an **era-progress indicator** (techs researched in the current age,
-  e.g. `Classical 1/4`). Reaching a new era's first tech triggers a **big "A New
+  Classical → Medieval → Renaissance → Industrial → Modern → Information), derived
+  from your most advanced tech, with an **era-progress indicator** (techs
+  researched in the current age, e.g. `Classical 2/6`). Reaching a new era's first tech triggers a **big "A New
   Age Dawns" banner** with a fanfare and a **one-time era bonus** (gold, science &
   culture, scaling with the age). Each AI civ ages and earns the bonus too. Year
   & ages are saved with the game.
@@ -108,7 +109,7 @@ civilizations** spread across the map — who also war with each other.
   snow-capped mountain ranges, and gently shimmering water**. Tiles are a single
   InstancedMesh and the props are instanced too, so even ~2000 tiles stay cheap;
   forests and peaks hide under fog until explored.
-  Deterministic per random seed each load; both civs start on the main landmass,
+  Deterministic per random seed each load; all civs start on the main landmass,
   and the outer islands are reachable once you research Sailing.
 - **RTS camera** — pan / zoom / rotate / orbit.
 - **Fog of war** — unexplored hexes are dark, explored-but-unseen are dimmed,
@@ -166,7 +167,8 @@ civilizations** spread across the map — who also war with each other.
   **spreads** city to city across the map, and **foreign followers pay you a
   tithe** in gold. The AI founds religions too.
 - **World Wonders** — landmark builds (Pyramids, Hanging Gardens, Great Library,
-  Colossus, Great Wall, Terracotta Army), each **one per game**: the first civ to
+  Colossus, Great Wall, Terracotta Army, and later the Oracle, Big Ben, the
+  Apollo Program and the Internet), each **one per game**: the first civ to
   finish one claims it and gets a permanent **empire-wide bonus** (production,
   food, science, gold, combat or cheaper military); everyone else loses it and
   gets a production refund. Completing one fires a global **"A Wonder of the
@@ -183,10 +185,13 @@ civilizations** spread across the map — who also war with each other.
   the Commercial Hub gold beside rivers, the Industrial Zone production next to
   hills/resources, and the Theater Square culture when clustered with other
   districts — so where you place them matters.
-- **Buildings** — Granary/Aqueduct (+food), Workshop/Factory (+prod),
-  Market/Bank (+gold), Library/University (+science) multiply their city's
-  yields; City Walls fortify a garrison. Each is gated by its tech (and, where it
-  belongs to one, by its district).
+- **Buildings** — a deep set of yield multipliers gated by tech: food
+  (Granary, Aqueduct, Sewer, Harbor), production (Workshop, Factory, Stable,
+  Power Plant), gold (Market, Bank, Stock Exchange), and science (Library,
+  University, Observatory, Laboratory, Research Lab) all multiply their city's
+  yields — and they **stack**, so a built-up capital snowballs. City Walls and the
+  Castle fortify a garrison. Each is gated by its tech (and, where it belongs to
+  one, by its district).
 - **City territory & expanding borders** — a city starts with the **six tiles
   around it** and then claims **one new tile at a time** as it banks culture,
   automatically steering toward the best unclaimed frontier tile — **resources and
@@ -220,7 +225,7 @@ civilizations** spread across the map — who also war with each other.
   (declare war / make peace). The AIs are opportunistic: they declare war on
   weaker neighbours, gang up, and sue for peace when they're outmatched.
 
-**Pass 3 — characters & depth** *(in progress)*
+**Pass 3 — characters & depth**
 
 - **Tile resources** — Wheat, Fish, Horses, Iron, Gold and Stone spawn on
   matching terrain (deterministic per seed), boost that tile's yields, and show
@@ -234,23 +239,29 @@ civilizations** spread across the map — who also war with each other.
 - **Combat animations** — melee units lunge, archers loose an arrow, the
   defender flashes with a spark burst and a floating "−N" damage number, and the
   slain fade and sink rather than popping out.
-- **Tech unlocks real power** — research opens up a progression of units, each
-  with its own low-poly model: Horseman, Swordsman, Catapult, Crossbowman,
-  Musketman, Artillery, Tank and the Airplane, alongside the economy/defense
-  buildings above. Units only appear in a city's build menu once their tech is in.
-- **Rigged character models** — soldier-type units are a **little squad of three
+- **Tech unlocks real power** — research opens up a long military progression,
+  each unit with its **own distinct low-poly mesh**: Spearman, Horseman, Swordsman,
+  Catapult, Knight, Crossbowman, Cannon, Musketman, Rifleman, Artillery, Infantry,
+  Tank, Modern Armor, the Airplane, Bomber and the Jet Fighter — plus a naval line
+  (Galley → Frigate → Destroyer → Battleship) — alongside the economy/defense
+  buildings above. Units only appear in a city's build menu once their tech is in,
+  and the AI automatically adopts the strongest unit it can build.
+- **Rigged character models** — the classic soldier types (Warrior, Scout,
+  Swordsman, Musketman and the civ-unique infantry) are a **little squad of three
   small rigged characters** with **idle/walk animation** (a CC0 RobotExpressive,
   by Tomás Laulhé / Don McCurdy) clustered on an owner-coloured base, loaded via
-  Three's GLTFLoader. It's a
-  progressive enhancement: if the model can't load, units fall back to their
-  procedural meshes. Drop your own rigged `.glb` (from Meshy / Tripo / Mixamo /
-  Quaternius…) into `vendor/models/` and register it in `src/models.js`.
+  Three's GLTFLoader. It's a progressive enhancement: if the model can't load,
+  units fall back to their procedural meshes. The other unit types (cavalry,
+  siege, armour, aircraft, ships, spearmen, riflemen…) each have their own
+  hand-built procedural mesh. Drop your own rigged `.glb` (from Meshy / Tripo /
+  Mixamo / Quaternius…) into `vendor/models/` and register it in `src/models.js`.
 - **City defense** — a unit garrisoned on its city takes reduced damage, and
   City Walls (Masonry) make it tougher still.
 - **Ships & seafaring** — research **Sailing** to *embark* land units across the
   water (they ride a little boat and are vulnerable at sea) and to build naval
-  units in coastal cities: the **Galley**, and later the **Frigate**. Sail a
-  Settler over to colonize the outer islands, or send a fleet to raid the coast.
+  units in coastal cities: the **Galley**, then the **Frigate**, **Destroyer** and
+  **Battleship** as your tech advances. Sail a Settler over to colonize the outer
+  islands, or send a fleet to raid the coast.
 - **Healing & attrition** — a unit that holds position recovers HP (the most
   inside a friendly city, some on owned land, none while embarked at sea), so
   fights are wars of attrition rather than one-shots.
@@ -265,7 +276,10 @@ civilizations** spread across the map — who also war with each other.
 
 ## Architecture
 
-Pure game logic is kept free of Three.js so it can be unit-tested in Node:
+Pure game logic is kept free of Three.js so it can be unit-tested in Node. The
+rules in `src/game.js` import Three (for meshes) but are still driven headlessly
+in Node via a stubbed scene/view (`test/harness.mjs`), since Three builds meshes
+fine without a GL context — only the renderer needs WebGL:
 
 | File | Responsibility |
 |---|---|
@@ -312,7 +326,8 @@ works under the project's `/hex-empire/` base path with no CDN dependency.
 
 - **Pass 2 — 4X loop:** ✅ city build queues, tech tree, unit production, buildings,
   city territory, AI economy.
-- **Pass 3 — characters & depth:** ⏳ tile resources, ranged combat and terrain
-  defense are in; still to come — rigged GLTF character models, distinct unit
-  art per type, and smarter strategic AI.
-- **Pass 4+ —** diplomacy, multiple civs, victory conditions, UI polish, save/load.
+- **Pass 3 — characters & depth:** ✅ tile resources, ranged combat, terrain
+  defense, rigged GLTF character models, distinct unit art per type, persistent
+  trade caravans, and a deep tech & civics tree are all in.
+- **Pass 4+ —** smarter strategic AI, religious units / active faith spread,
+  more UI polish, and further balance.
