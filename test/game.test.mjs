@@ -318,4 +318,57 @@ function twoCities(game, world, owner = 0) {
   })());
 }
 
+// --- Space Race victory (reachable late game) ------------------------------
+{
+  const { game, world } = makeGame();
+  const s0 = findStartTile(world);
+  foundAt(game, 0, s0.q, s0.r);
+  game.spawnUnit('warrior', 1, s0.q + 3, s0.r); // keep a rival alive so domination doesn't fire
+  const c = game.cities.find(cc => cc.owner === 0);
+
+  // Flight no longer ends the game (it used to be the science victory).
+  game.civs[0].research.researched.add('flight');
+  game._checkGameOver();
+  check('reaching Flight no longer ends the game', game.gameOver === null);
+
+  // The spaceship project unlocks only with Rocketry.
+  check('no spaceship project before Rocketry', !game.buildOptions(0, c).some(o => o.kind === 'project'));
+  for (const id of Object.keys(TECHS)) game.civs[0].research.researched.add(id); // includes rocketry
+  check('spaceship project unlocks once Rocketry is researched', game.buildOptions(0, c).some(o => o.kind === 'project' && o.id === 'spaceship'));
+
+  // Building it wins the Space Race for the player.
+  game.enqueue(c, game.buildOptions(0, c).find(o => o.kind === 'project'));
+  c.production = 100000; // enough to finish at once
+  game._processProduction(c);
+  check('finishing the spaceship sets the launch flag', game.spaceLaunched === 0);
+  game._checkGameOver();
+  check('launching the spaceship wins the game', !!(game.gameOver && game.gameOver.win));
+  check('the spaceship is one-per-game (no longer offered after launch)', !game.buildOptions(0, c).some(o => o.kind === 'project'));
+}
+
+// The AI races for space and can win it (a loss for the player).
+{
+  const { game, world } = makeGame();
+  foundAt(game, 1, findStartTile(world).q, findStartTile(world).r);
+  for (const id of Object.keys(TECHS)) game.civs[1].research.researched.add(id);
+  game._runAICiv(1);
+  const aiCity = game.cities.find(cc => cc.owner === 1);
+  check('the AI queues the spaceship once it has Rocketry', aiCity.queue.some(i => i.kind === 'project'));
+  aiCity.production = 100000;
+  game._processProduction(aiCity);
+  game._checkGameOver();
+  check('an AI space launch ends the game as a player loss', !!(game.gameOver && !game.gameOver.win && game.spaceLaunched === 1));
+}
+
+// Save/load preserves a launch.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  game.spaceLaunched = 0;
+  const snap = JSON.parse(JSON.stringify(game.serialize()));
+  const { game: g2 } = makeGame();
+  g2.restore(snap);
+  check('save/load preserves the space launch', g2.spaceLaunched === 0);
+}
+
 done();

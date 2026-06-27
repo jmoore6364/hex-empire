@@ -25,6 +25,10 @@ const CIV_NAMES = ['Your Empire', 'Crimson', 'Verdant', 'Amber', 'Violet'];
 // One entry per era in tech.js ERAS (Ancient … Information).
 const AGE_YEAR_STEP = [40, 28, 18, 10, 6, 3, 1];
 
+// The Space Race finale: a one-off city "project" unlocked by Rocketry. The
+// first civ to finish it launches the Exodus Spaceship and wins the game.
+const SPACESHIP = { kind: 'project', id: 'spaceship', name: 'Exodus Spaceship', cost: 600, glyph: '🚀', requires: 'rocketry', desc: 'Win the Space Race — launch a colony ship to the stars' };
+
 // AI strength by difficulty: `mul` scales AI civ income/production, `combat`
 // adds to AI attack strength.
 const DIFFICULTY = {
@@ -57,6 +61,8 @@ export class Game {
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
+    this.spaceLaunched = null;         // owner id of the civ that launched the Exodus Spaceship
+    this.spaceLaunchedBy = null;       // { owner, you, city } on the turn it launches, for a banner
 
     // Per-civ state: 0 = player, 1+ = AI. Science accrues in treasury.science as a
     // research "bank" that is spent when the current tech's cost is met.
@@ -638,6 +644,10 @@ export class Game {
       if (WONDERS[id].coastal && city && !this.isCoastal(city)) continue;
       items.push({ kind: 'wonder', id, name: WONDERS[id].name, cost: WONDERS[id].cost, desc: WONDERS[id].desc, glyph: WONDERS[id].glyph });
     }
+    // The Space Race finale, once Rocketry is in and nobody has launched yet.
+    if (researched.has(SPACESHIP.requires) && this.spaceLaunched == null) {
+      items.push({ kind: 'project', id: SPACESHIP.id, name: SPACESHIP.name, cost: SPACESHIP.cost, desc: SPACESHIP.desc, glyph: SPACESHIP.glyph });
+    }
     return items;
   }
 
@@ -694,6 +704,14 @@ export class Game {
       city.wonders.add(item.id);
       this.wonderBuilt = { name: WONDERS[item.id].name, glyph: WONDERS[item.id].glyph, owner: city.owner, you: city.owner === 0, city: city.name };
       this.events.push(`${city.owner === 0 ? 'You' : this.civs[city.owner].name} completed ${WONDERS[item.id].name}!`);
+      return;
+    }
+    if (item.kind === 'project') {
+      if (item.id === SPACESHIP.id && this.spaceLaunched == null) {
+        this.spaceLaunched = city.owner;
+        this.spaceLaunchedBy = { owner: city.owner, you: city.owner === 0, city: city.name };
+        this.events.push(`${city.owner === 0 ? 'You' : this.civs[city.owner].name} launched the Exodus Spaceship!`);
+      }
       return;
     }
     if (item.kind === 'district') {
@@ -878,6 +896,7 @@ export class Game {
       difficulty: this.difficulty,
       turnLimit: this.turnLimit,
       gameOver: this.gameOver,
+      spaceLaunched: this.spaceLaunched,
     };
   }
 
@@ -952,23 +971,23 @@ export class Game {
     this._diff = DIFFICULTY[this.difficulty] || DIFFICULTY.normal;
     this.turnLimit = data.turnLimit || null;
     this.gameOver = data.gameOver || null;
+    this.spaceLaunched = data.spaceLaunched ?? null;
     this.recomputeOwnership();
     this._recomputeTrade();
     this.income = this.computeIncome(0);
     this.recomputeFog();
   }
 
-  // Decide the game once a civ is wiped out or someone reaches Flight.
+  // Decide the game on a space-race launch, a wipe-out, or a turn-limit score.
   _checkGameOver() {
     if (this.gameOver) return;
     const alive = (owner) => this.cities.some(c => c.owner === owner) || this.units.some(u => u.owner === owner);
-    for (let o = 0; o < this.civs.length; o++) {
-      if (this.civs[o].research.researched.has('flight')) {
-        this.gameOver = o === 0
-          ? { win: true, reason: 'Flight achieved — your aircraft rule the skies!' }
-          : { win: false, reason: `${this.civs[o].name} reached Flight first.` };
-        return;
-      }
+    // Science/space victory: the first civ to launch the Exodus Spaceship wins.
+    if (this.spaceLaunched != null) {
+      this.gameOver = this.spaceLaunched === 0
+        ? { win: true, reason: 'Space Race won — your colony ship reaches the stars!' }
+        : { win: false, reason: `${this.civs[this.spaceLaunched].name} won the Space Race.` };
+      return;
     }
     if (!alive(0)) { this.gameOver = { win: false, reason: 'Your empire has fallen.' }; return; }
     const rivals = this.civs.slice(1).filter(c => alive(c.owner));
@@ -1319,6 +1338,9 @@ export class Game {
       if (threatened && !defended) {
         if (civ.research.researched.has('masonry') && !c.buildings.has('walls')) c.queue.push(this._aiItem('building', 'walls'));
         else c.queue.push(this._aiItem('unit', this._aiBestUnit(owner)));
+      } else if (civ.research.researched.has(SPACESHIP.requires) && this.spaceLaunched == null
+                 && !this.cities.some(cc => cc.owner === owner && cc.queue.some(i => i.kind === 'project'))) {
+        c.queue.push({ kind: 'project', id: SPACESHIP.id, name: SPACESHIP.name, cost: SPACESHIP.cost }); // race for space
       } else if (myCities.length < 3 && mySettlers === 0) {
         c.queue.push(this._aiItem('unit', 'settler'));
       } else if (wonder && (this.turn + c.q) % 2 === 0) { // sometimes chase a wonder

@@ -515,10 +515,12 @@ function refreshCityPanel() {
   const queuedBuildings = new Set(c.queue.filter(i => i.kind === 'building').map(i => i.id));
   const queuedDistricts = new Set(c.queue.filter(i => i.kind === 'district').map(i => i.id));
   const queuedWonders = new Set(c.queue.filter(i => i.kind === 'wonder').map(i => i.id));
+  const queuedProjects = new Set(c.queue.filter(i => i.kind === 'project').map(i => i.id));
   for (const item of game.buildOptions(0, c)) {
     if (item.kind === 'building' && (c.buildings.has(item.id) || queuedBuildings.has(item.id))) continue;
     if (item.kind === 'district' && queuedDistricts.has(item.id)) continue;
     if (item.kind === 'wonder' && queuedWonders.has(item.id)) continue;
+    if (item.kind === 'project' && queuedProjects.has(item.id)) continue;
     if (item.domain === 'sea' && !coastal) continue; // ships need a coastal city
     const turns = game.turnsFor(c, game.itemCost(0, item), false);
     if (item.kind === 'wonder') {
@@ -526,6 +528,8 @@ function refreshCityPanel() {
     } else if (item.kind === 'district') {
       const sites = game.districtSites(c).length;
       actions.push({ label: `🏛 ${item.name} (${turns}t)`, enabled: sites > 0, onClick: () => beginPlaceDistrict(c, item) });
+    } else if (item.kind === 'project') {
+      actions.push({ label: `${item.glyph} ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
     } else {
       actions.push({ label: `${item.kind === 'building' ? '🏗' : '⚒'} ${item.name} (${turns}t)`, enabled: true, onClick: () => { game.enqueue(c, item); refreshCityPanel(); } });
     }

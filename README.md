@@ -54,13 +54,15 @@ to your next unit with moves left and the camera pans to it — so you can play 
 whole turn without hunting for idle units.
 
 **Win** by wiping out every rival civilization (capture all their cities) or by
-being the first to research **Flight**; **lose** if you're eliminated or a rival
-gets Flight first. To take a city, batter it with attacks until its defense hits 0, then move
-a melee unit in to capture it — City Walls and a garrison make that much harder.
+winning the **Space Race** — research deep into the tree to **Rocketry**, then
+build the **Exodus Spaceship** and launch it before anyone else; **lose** if
+you're eliminated or a rival launches first. To take a city, batter it with
+attacks until its defense hits 0, then move a melee unit in to capture it — City
+Walls and a garrison make that much harder.
 
 Found a city, then click it to pick what to **build** (units, or buildings once
 their tech is researched). Open the **🔬 Research** drawer to choose technology:
-click any tech — even a distant one like Flight — and the whole prerequisite path
+click any tech — even a distant one like Rocketry — and the whole prerequisite path
 is queued automatically. Each turn your cities work the tiles inside their
 borders, grow, pour production into their queue, and bank science toward your
 research. Expand with new Settlers and out-develop the **rival AI
@@ -267,8 +269,9 @@ civilizations** spread across the map — who also war with each other.
   fights are wars of attrition rather than one-shots.
 - **City capture & victory** — cities have defense HP (boosted by population and
   City Walls) that regenerates between assaults. Wear a city down and march a
-  melee unit in to capture it. Win by **domination** (eliminate the AI), by
-  reaching **Flight**, or — if a turn limit is set — by leading on **score**
+  melee unit in to capture it. Win by **domination** (eliminate the AI), by the
+  **Space Race** (research to Rocketry, then build & launch the Exodus
+  Spaceship), or — if a turn limit is set — by leading on **score**
   (cities, population, knowledge and territory) when the clock runs out; a
   game-over screen offers a fresh game. The AI besieges your cities too.
 - **Terrain defense** — defenders on hills, forest and mountains take less
