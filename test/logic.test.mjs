@@ -15,7 +15,7 @@ import { CIVICS, GOVERNMENTS, POLICIES, ERAS as CIVIC_ERAS, canResearch as canCi
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
 import { defenseMultiplier, resolveAttack } from '../src/combat.js';
 import { CIVILIZATIONS, CIV_BY_ID } from '../src/civilizations.js';
-import { portraitSVG } from '../src/portraits.js';
+import { portraitSVG, portraitFullSVG } from '../src/portraits.js';
 
 let passed = 0, failed = 0;
 function check(name, cond) {
@@ -413,6 +413,16 @@ check('a Monument adds flat culture', (() => {
   })());
   // ids are unique per svg (clipPath/gradient) so two portraits can coexist in one DOM
   check('portrait gradient/clip ids are namespaced by civ id', CIVILIZATIONS.every((c, i) => svgs[i].includes(`pg_${c.id}`) && svgs[i].includes(`pc_${c.id}`)));
+
+  // full-body figures (shown in the trade window)
+  const fulls = CIVILIZATIONS.map(c => portraitFullSVG(c.id, c.color, 150));
+  check('portraitFullSVG returns a well-formed svg for every civ',
+    fulls.every(s => s.startsWith('<svg') && s.trimEnd().endsWith('</svg>') && s.includes('class="portrait-full"')));
+  check('full-body figures are taller than wide (standing aspect)',
+    fulls.every(s => /height="150"/.test(s) && /width="71"/.test(s)));
+  check('full-body figures reuse the civ headwear', portraitFullSVG('violet', 0x9b59b6, 150).includes('polygon'));
+  check('full-body figures are visually distinct per civ', new Set(fulls).size === fulls.length);
+  check('full-body gradient ids are namespaced by civ id', CIVILIZATIONS.every((c, i) => fulls[i].includes(`pfg_${c.id}`)));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);

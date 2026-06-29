@@ -157,7 +157,10 @@
       background: rgba(6,9,14,0.78); backdrop-filter: blur(4px); z-index: 27; pointer-events: auto; }
     #deal.open { display: flex; }
     #deal .deal-card { background: rgba(16,22,33,0.97); border: 1px solid rgba(217,184,92,0.5); border-radius: 12px;
-      padding: 20px 24px; max-width: 94vw; width: 560px; box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
+      padding: 20px 24px; max-width: 94vw; width: 560px; max-height: 92vh; overflow-y: auto; box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
+    .deal-fig { text-align: center; margin: -2px 0 8px; }
+    .deal-fig .portrait-full { filter: drop-shadow(0 4px 8px rgba(0,0,0,0.5)); }
+    .deal-fig .cap { display: block; font-size: 11px; opacity: 0.75; margin-top: 2px; }
     #deal h2 { font-size: 20px; margin: 0 0 14px; color: #e6d27a; text-align: center; }
     .deal-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
     .deal-col { background: rgba(10,14,20,0.6); border: 1px solid rgba(120,160,210,0.22); border-radius: 8px; padding: 10px 12px; }
@@ -361,8 +364,8 @@
     <div class="deal-card">
       <h2 id="deal-title">Trade</h2>
       <div class="deal-cols">
-        <div class="deal-col"><h4 id="deal-you-h">You give</h4><div id="deal-you"></div></div>
-        <div class="deal-col"><h4 id="deal-them-h">They give</h4><div id="deal-them"></div></div>
+        <div class="deal-col"><div class="deal-fig" id="deal-fig-you"></div><h4 id="deal-you-h">You give</h4><div id="deal-you"></div></div>
+        <div class="deal-col"><div class="deal-fig" id="deal-fig-them"></div><h4 id="deal-them-h">They give</h4><div id="deal-them"></div></div>
       </div>
       <div class="deal-foot">
         <label class="deal-term">Term

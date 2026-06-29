@@ -1,7 +1,8 @@
 // portraits.js — procedural ruler portraits, drawn as inline SVG (no image
-// assets), in the same spirit as emblems.js. Each civ gets a stylized
-// head-and-shoulders bust: skin/hair tones derived deterministically from the
-// civ id, framed in the civ colour, wearing trait-themed headwear.
+// assets), in the same spirit as emblems.js. Each civ gets a stylized ruler
+// likeness: skin/hair tones derived deterministically from the civ id, trait-
+// themed headwear, in two forms — a framed head-and-shoulders bust
+// (portraitSVG) and a standing full-body figure (portraitFullSVG).
 
 const h2 = (c) => Math.max(0, Math.min(255, c | 0)).toString(16).padStart(2, '0');
 const hex = (r, g, b) => `#${h2(r)}${h2(g)}${h2(b)}`;
@@ -19,6 +20,18 @@ const HAIRS = ['#1d1410', '#3a2718', '#5d3a1d', '#7c4a22', '#9a6a2c', '#c39a48',
 // Rulers who wear a beard (the rest are clean-shaven), curated for variety.
 const BEARDED = new Set(['azure', 'crimson', 'ember', 'bronze', 'onyx']);
 
+// Deterministic skin/hair/beard for a civ id.
+function derive(id) {
+  const seed = hash(id || 'x');
+  return { skin: SKINS[seed % SKINS.length], hair: HAIRS[(seed >> 3) % HAIRS.length], bearded: BEARDED.has(id) };
+}
+
+// Civ colour split into light / mid / dark shades.
+function shades(colorHex) {
+  const r = (colorHex >> 16) & 255, g = (colorHex >> 8) & 255, b = colorHex & 255;
+  return { light: hex(r, g, b), mid: hex(r * 0.72, g * 0.72, b * 0.72), dark: hex(r * 0.42, g * 0.42, b * 0.42) };
+}
+
 // Helmet/cap dome covering the top of the head, reused by several headwears.
 const dome = (fill, stroke) =>
   `<path d="M31,42 Q50,14 69,42 Z" fill="${fill}"/><path d="M31,42 L69,42" stroke="${stroke}" stroke-width="2.4"/>`;
@@ -27,7 +40,8 @@ const dome = (fill, stroke) =>
 const leaf = (x, y, deg) =>
   `<ellipse cx="${x}" cy="${y}" rx="4.2" ry="2.1" fill="#54ab69" transform="rotate(${deg} ${x} ${y})"/>`;
 
-// Per-civ headwear, drawn last (over the face). Keyed by civ id.
+// Per-civ headwear, drawn over the face. Keyed by civ id. All headwears sit
+// around a head centred at (50,50), so they work for both portrait forms.
 const HEADWEAR = {
   // Seafarers — horned helm.
   azure: dome('#8a97a8', '#5b6675') +
@@ -79,22 +93,30 @@ const HEADWEAR = {
 
 const FALLBACK = dome('#8895a6', '#5b6675');
 
-// Returns an inline SVG string for a civ's ruler portrait. `colorHex` is a
-// 0xRRGGBB number (the civ colour). `size` is the rendered px width/height.
-export function portraitSVG(id, colorHex, size = 40) {
-  const r = (colorHex >> 16) & 255, g = (colorHex >> 8) & 255, b = colorHex & 255;
-  const light = hex(r, g, b), mid = hex(r * 0.72, g * 0.72, b * 0.72), dark = hex(r * 0.42, g * 0.42, b * 0.42);
-  const seed = hash(id || 'x');
-  const skin = SKINS[seed % SKINS.length];
-  const hair = HAIRS[(seed >> 3) % HAIRS.length];
-  const bearded = BEARDED.has(id);
-  const gid = `pg_${id || 'x'}`, cid = `pc_${id || 'x'}`;
-
+// The head: hair, face, features, beard/mouth and headwear, around centre
+// (50,50). Shared by both portrait forms. Caller draws the neck/body first.
+function headMarkup(skin, hair, bearded, id) {
   const beard = bearded
     ? `<path d="M35,52 Q37,73 50,77 Q63,73 65,52 Q58,63 50,63 Q42,63 35,52 Z" fill="${hair}"/>` +
       `<path d="M44,58 Q50,61 56,58" fill="none" stroke="${hair}" stroke-width="3" stroke-linecap="round"/>`
     : `<path d="M45,61 Q50,64 55,61" fill="none" stroke="#7d4b3a" stroke-width="1.6" stroke-linecap="round"/>`;
+  return `<ellipse cx="50" cy="49" rx="20" ry="21" fill="${hair}"/>
+    <ellipse cx="50" cy="50" rx="17" ry="19" fill="${skin}"/>
+    <circle cx="33" cy="51" r="3.2" fill="${skin}"/><circle cx="67" cy="51" r="3.2" fill="${skin}"/>
+    <path d="M40,44 Q44,42 48,44" fill="none" stroke="${hair}" stroke-width="1.6" stroke-linecap="round"/>
+    <path d="M52,44 Q56,42 60,44" fill="none" stroke="${hair}" stroke-width="1.6" stroke-linecap="round"/>
+    <circle cx="43.5" cy="48" r="2" fill="#26323f"/><circle cx="56.5" cy="48" r="2" fill="#26323f"/>
+    <path d="M50,49 L48,56 Q50,57 52,56" fill="none" stroke="#9c6a48" stroke-width="1.4" stroke-linecap="round"/>
+    ${beard}
+    ${HEADWEAR[id] || FALLBACK}`;
+}
 
+// Returns an inline SVG string for a civ's ruler portrait — a framed
+// head-and-shoulders bust. `colorHex` is a 0xRRGGBB number; `size` is px.
+export function portraitSVG(id, colorHex, size = 40) {
+  const { light, mid, dark } = shades(colorHex);
+  const { skin, hair, bearded } = derive(id);
+  const gid = `pg_${id || 'x'}`, cid = `pc_${id || 'x'}`;
   return `<svg class="portrait" viewBox="0 0 100 100" width="${size}" height="${size}" xmlns="http://www.w3.org/2000/svg">
     <defs>
       <linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${light}"/><stop offset="1" stop-color="${dark}"/></linearGradient>
@@ -105,16 +127,30 @@ export function portraitSVG(id, colorHex, size = 40) {
       <path d="M14,100 Q50,60 86,100 Z" fill="${dark}"/>
       <path d="M24,100 Q50,72 76,100 Z" fill="${mid}" opacity="0.55"/>
       <path d="M43,60 L57,60 L57,72 L43,72 Z" fill="${skin}"/>
-      <ellipse cx="50" cy="49" rx="20" ry="21" fill="${hair}"/>
-      <ellipse cx="50" cy="50" rx="17" ry="19" fill="${skin}"/>
-      <circle cx="33" cy="51" r="3.2" fill="${skin}"/><circle cx="67" cy="51" r="3.2" fill="${skin}"/>
-      <path d="M40,44 Q44,42 48,44" fill="none" stroke="${hair}" stroke-width="1.6" stroke-linecap="round"/>
-      <path d="M52,44 Q56,42 60,44" fill="none" stroke="${hair}" stroke-width="1.6" stroke-linecap="round"/>
-      <circle cx="43.5" cy="48" r="2" fill="#26323f"/><circle cx="56.5" cy="48" r="2" fill="#26323f"/>
-      <path d="M50,49 L48,56 Q50,57 52,56" fill="none" stroke="#9c6a48" stroke-width="1.4" stroke-linecap="round"/>
-      ${beard}
-      ${HEADWEAR[id] || FALLBACK}
+      ${headMarkup(skin, hair, bearded, id)}
     </g>
     <circle cx="50" cy="50" r="46" fill="none" stroke="#0d1622" stroke-width="4"/>
+  </svg>`;
+}
+
+// Returns an inline SVG string for a civ's ruler as a standing full-body
+// figure — a robed monarch in the civ colour. `height` is px; the width
+// follows the 100x210 aspect. No frame, so it sits on any background.
+export function portraitFullSVG(id, colorHex, height = 160) {
+  const { light, mid, dark } = shades(colorHex);
+  const { skin, hair, bearded } = derive(id);
+  const rid = `pfg_${id || 'x'}`;
+  const w = Math.round(height * 100 / 210);
+  return `<svg class="portrait-full" viewBox="0 0 100 210" width="${w}" height="${height}" xmlns="http://www.w3.org/2000/svg">
+    <defs><linearGradient id="${rid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${mid}"/><stop offset="1" stop-color="${dark}"/></linearGradient></defs>
+    <ellipse cx="50" cy="205" rx="30" ry="5" fill="rgba(0,0,0,0.35)"/>
+    <path d="M44,58 L56,58 L56,70 L44,70 Z" fill="${skin}"/>
+    <path d="M50,63 C39,63 32,68 30,80 L19,202 Q50,212 81,202 L70,80 C68,68 61,63 50,63 Z" fill="url(#${rid})"/>
+    <path d="M50,64 C39,64 32,69 30,82 Q50,94 70,82 C68,69 61,64 50,64 Z" fill="${light}"/>
+    <path d="M45,66 L50,80 L55,66 Z" fill="${skin}"/>
+    <path d="M48,80 L52,80 L52,150 L48,150 Z" fill="${light}" opacity="0.85"/>
+    <rect x="27" y="146" width="46" height="9" rx="2" fill="${dark}"/>
+    <rect x="46" y="146" width="8" height="9" rx="1.5" fill="${light}"/>
+    ${headMarkup(skin, hair, bearded, id)}
   </svg>`;
 }

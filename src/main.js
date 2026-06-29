@@ -23,7 +23,7 @@ import { Sound } from './audio.js';
 import { loadUnitModels } from './models.js';
 import { CIVILIZATIONS, CIV_BY_ID } from './civilizations.js';
 import { emblemSVG } from './emblems.js';
-import { portraitSVG } from './portraits.js';
+import { portraitSVG, portraitFullSVG } from './portraits.js';
 
 // A civ's ruler name+title (falls back to the civ name for pre-portrait saves).
 const rulerOf = (o) => game.civs[o].ruler || (CIV_BY_ID[game.civs[o].id] || {}).ruler || game.civs[o].name;
@@ -389,6 +389,11 @@ function updateVerdict() {
 function openDealWindow(o) {
   dealCiv = o;
   document.getElementById('deal-title').innerHTML = `${portraitSVG(game.civs[o].id, OWNER_COLOR[o], 28)} Trade with ${rulerOf(o)} <i style="opacity:.6">of ${game.civs[o].name}</i>`;
+  // Full-body rulers preside over each side of the table.
+  document.getElementById('deal-fig-you').innerHTML =
+    `${portraitFullSVG(game.civs[0].id, OWNER_COLOR[0], 150)}<span class="cap">${rulerOf(0)}</span>`;
+  document.getElementById('deal-fig-them').innerHTML =
+    `${portraitFullSVG(game.civs[o].id, OWNER_COLOR[o], 150)}<span class="cap">${rulerOf(o)}</span>`;
   document.getElementById('deal-you').innerHTML = dealColumn('you', 0);
   document.getElementById('deal-them').innerHTML = dealColumn('them', o);
   document.getElementById('deal-term').value = '30';

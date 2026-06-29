@@ -18,4 +18,8 @@ await ev(`document.getElementById('menu-start').click()`); await new Promise(r =
 await ev(`(()=>{const g=window.__hex.game;for(let o=0;o<g.civs.length;o++){if(g.cities.some(c=>c.owner===o))continue;const s=g.units.find(u=>u.owner===o&&u.type==='settler');if(s)g.foundCity(s);}window.__hex.ui.renderDiplomacy&&window.__hex.ui.renderDiplomacy();document.querySelector('.side-tab[data-tab=diplomacy]').click();return 'ok';})()`);
 await new Promise(r => setTimeout(r, 600));
 await shot('diplomacy-portraits');
+// Open the trade window against civ 1 (everyone starts at peace) and shoot it.
+await ev(`(()=>{const b=document.querySelector('#diplo-body [data-deal-civ="1"]');if(b)b.click();return !!b;})()`);
+await new Promise(r => setTimeout(r, 500));
+await shot('trade-fullbody');
 ws.close(); process.exit(0);
