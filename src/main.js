@@ -15,6 +15,7 @@ import { WONDERS } from './wonders.js';
 import { gppCost, GREAT_PEOPLE } from './greatpeople.js';
 import { BELIEFS } from './religions.js';
 import { OWNER_COLOR } from './units.js';
+import { RESOURCES, TRADEABLE } from './resources.js';
 import { Effects } from './effects.js';
 import { HealthBars } from './health.js';
 import { TreePanel } from './researchui.js';
@@ -279,7 +280,12 @@ function renderDiplomacy() {
     if (!game.isCivAlive(o)) continue;
     const war = game.atWar(0, o);
     h += `<div class="row"><span>${emblemSVG(game.civs[o].id, OWNER_COLOR[o], 18)}<span style="color:${ownerHex(o)}">${game.civs[o].name}</span></span>` +
-      `<span>${war ? '⚔ War' : '🕊 Peace'}<button class="act" data-civ="${o}">${war ? 'Make Peace' : 'Declare War'}</button></span></div>`;
+      `<span>${war ? '⚔ War' : '🕊 Peace'}<button class="act" data-civ="${o}">${war ? 'Make Peace' : 'Declare War'}</button>` +
+      `${war ? '' : `<button class="act deal-btn" data-deal-civ="${o}">🤝 Trade</button>`}</span></div>`;
+    // Active deals with this civ.
+    for (const d of game.deals.filter(d => (d.a === 0 && d.b === o) || (d.b === 0 && d.a === o))) {
+      h += `<div class="deal-active"><span>${describeDeal(d)} · ${d.turnsLeft}t</span><button class="act end" data-end-deal="${d.id}">End</button></div>`;
+    }
   }
   document.getElementById('diplo-body').innerHTML = h || '<div class="row"><span>No rivals remain.</span></div>';
   document.querySelectorAll('#diplo-body [data-civ]').forEach(b => b.addEventListener('click', () => {
@@ -289,7 +295,106 @@ function renderDiplomacy() {
     renderDiplomacy();
     if (selected) drawOverlays(null); // attackable targets changed
   }));
+  document.querySelectorAll('#diplo-body [data-deal-civ]').forEach(b =>
+    b.addEventListener('click', () => openDealWindow(+b.dataset.dealCiv)));
+  document.querySelectorAll('#diplo-body [data-end-deal]').forEach(b =>
+    b.addEventListener('click', () => { game.cancelDeal(+b.dataset.endDeal); game.income = game.computeIncome(); ui.refreshTopbar(game); renderDiplomacy(); }));
 }
+
+// One-line summary of a standing deal from the player's point of view.
+function describeDeal(d) {
+  const mine = d.a === 0 ? d.give : d.take;   // what the player gives
+  const theirs = d.a === 0 ? d.take : d.give; // what the player gets
+  const part = (b) => {
+    const bits = [];
+    if (b.gold) bits.push(`${b.gold}g`);
+    if (b.goldPerTurn) bits.push(`${b.goldPerTurn}g/t`);
+    if (b.science) bits.push(`${b.science}🔬`);
+    b.res.forEach(r => bits.push(RESOURCES[r]?.icon || r));
+    return bits.join(' ') || '—';
+  };
+  return `${part(mine)} ⇄ ${part(theirs)}`;
+}
+
+// --- the trade-deal window ---------------------------------------------------
+const dealEl = document.getElementById('deal');
+let dealCiv = null;
+
+// One column of offerable goods for `owner`. `side` is the input-id prefix.
+function dealColumn(side, owner) {
+  const spare = TRADEABLE.filter(id => game._resAvailable(owner, id) > 0);
+  const pills = spare.length
+    ? spare.map(id => `<label data-res="${id}"><input type="checkbox" data-res="${id}">${RESOURCES[id].icon} ${RESOURCES[id].name}</label>`).join('')
+    : '<span class="none">no spare resources</span>';
+  return `<div class="deal-line"><span>💰 Gold</span><input type="number" id="${side}-gold" min="0" value="0"></div>` +
+    `<div class="deal-line"><span>💰 Gold / turn</span><input type="number" id="${side}-gpt" min="0" value="0"></div>` +
+    `<div class="deal-line"><span>🔬 Science</span><input type="number" id="${side}-sci" min="0" value="0"></div>` +
+    `<div class="deal-res">${pills}</div>`;
+}
+
+function readBasket(side) {
+  const num = (suffix) => Math.max(0, Math.floor(+document.getElementById(`${side}-${suffix}`).value || 0));
+  const res = [...dealEl.querySelectorAll(`#deal-${side} .deal-res input:checked`)].map(c => c.dataset.res);
+  return { gold: num('gold'), goldPerTurn: num('gpt'), science: num('sci'), res };
+}
+
+// Build the deal the inputs currently describe (player is the proposer, a=0).
+function currentDeal() {
+  const give = game._basket(readBasket('you'));    // player -> partner
+  const take = game._basket(readBasket('them'));   // partner -> player
+  const term = Math.max(0, Math.floor(+document.getElementById('deal-term').value || 0));
+  return { give, take, term, deal: { a: 0, b: dealCiv, term, turnsLeft: term, give, take } };
+}
+
+function dealEmpty(g, t) {
+  const z = (b) => !b.gold && !b.goldPerTurn && !b.science && !b.res.length;
+  return z(g) && z(t);
+}
+
+function updateVerdict() {
+  const v = document.getElementById('deal-verdict');
+  const btn = document.getElementById('deal-propose');
+  const { give, take, term, deal } = currentDeal();
+  let ok = false, msg = '', col = '#9fb3c8';
+  if (dealEmpty(give, take)) { msg = 'Add terms to trade.'; }
+  else if ((give.res.length || take.res.length || give.goldPerTurn || take.goldPerTurn) && term <= 0) {
+    msg = 'Pick a term for these goods.'; col = '#e6b14a';
+  } else if (game.civs[0].treasury.gold < give.gold) { msg = 'You cannot afford that.'; col = '#e88'; }
+  else if (game.aiWouldAccept(deal)) { ok = true; msg = `✓ ${game.civs[dealCiv].name} would accept`; col = '#7fd17f'; }
+  else { msg = `✗ ${game.civs[dealCiv].name} would refuse`; col = '#e88'; }
+  v.textContent = msg; v.style.color = col;
+  btn.disabled = !ok;
+}
+
+function openDealWindow(o) {
+  dealCiv = o;
+  document.getElementById('deal-title').innerHTML = `Trade with ${emblemSVG(game.civs[o].id, OWNER_COLOR[o], 18)} ${game.civs[o].name}`;
+  document.getElementById('deal-you').innerHTML = dealColumn('you', 0);
+  document.getElementById('deal-them').innerHTML = dealColumn('them', o);
+  document.getElementById('deal-term').value = '30';
+  dealEl.querySelectorAll('input[type=number]').forEach(i => i.addEventListener('input', updateVerdict));
+  dealEl.querySelectorAll('.deal-res input').forEach(i => i.addEventListener('change', () => {
+    i.closest('label').classList.toggle('on', i.checked); updateVerdict();
+  }));
+  updateVerdict();
+  dealEl.classList.add('open');
+}
+
+function closeDeal() { dealEl.classList.remove('open'); dealCiv = null; }
+
+document.getElementById('deal-close').addEventListener('click', closeDeal);
+document.getElementById('deal-term').addEventListener('change', updateVerdict);
+dealEl.addEventListener('click', (e) => { if (e.target === dealEl) closeDeal(); });
+document.getElementById('deal-propose').addEventListener('click', () => {
+  const { give, take, term, deal } = currentDeal();
+  if (!game.aiWouldAccept(deal)) { ui.toast(`${game.civs[dealCiv].name} declines.`, '#e88'); return; }
+  const partner = dealCiv;
+  const res = game.proposeDeal(0, partner, give, take, term);
+  if (res.ok) {
+    ui.toast(`Deal struck with ${game.civs[partner].name}`, '#7fd17f'); sound.play('city');
+    closeDeal(); game.income = game.computeIncome(); ui.refreshTopbar(game); renderDiplomacy();
+  } else ui.toast(res.msg, '#e88');
+});
 // --- standings panel ---------------------------------------------------------
 const standPane = document.getElementById('standings');
 function renderStandings() {
@@ -804,6 +909,7 @@ function endTurn() {
 }
 ui.onEndTurn(endTurn);
 window.addEventListener('keydown', (e) => {
+  if (dealEl.classList.contains('open')) { if (e.code === 'Escape') closeDeal(); return; } // modal swallows keys
   if (e.code === 'Space') { e.preventDefault(); endTurn(); }
   if (e.code === 'Escape') { if (placing) { placing = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (tradePick) { tradePick = null; view.clearHighlights(); ui.toast('Cancelled', '#9fd0ff'); } else if (sidebarOpen()) closeSidebar(); else deselect(); }
   if (e.code === 'Tab') { e.preventDefault(); cycleToNextActive(selected); } // cycle to next active unit

@@ -13,6 +13,7 @@ import { GREAT_PEOPLE, gppCost } from './greatpeople.js';
 import { BELIEFS, RELIGION_NAMES } from './religions.js';
 import { computeOwnership, ownedTiles, initialClaim, expandClaim } from './territory.js';
 import { cityYields } from './economy.js';
+import { RESOURCES, TRADEABLE } from './resources.js';
 import { resolveAttack } from './combat.js';
 import { isWater } from './worldgen.js';
 import { CIVICS, GOVERNMENTS, POLICIES, availableCivics, availableGovernments, availablePolicies, pathTo as civicPathTo } from './civics.js';
@@ -58,6 +59,8 @@ export class Game {
     this.wonderBuilt = null;           // {name, owner, you} on the turn one completes
     this.greatPersonBorn = null;       // {name, glyph, …} on the turn the player earns one
     this.tradeRoutes = [];             // { from, to } city pairs, for rendering
+    this.deals = [];                   // active diplomatic deals (resource/gold leases)
+    this.dealSeq = 1;                  // monotonic id source for deals
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
@@ -416,6 +419,7 @@ export class Game {
   declareWar(a, b) {
     if (a === b || this.atWar(a, b)) return;
     this.wars.add(this._warKey(a, b));
+    this._cancelDealsBetween(a, b); // trade dies with the peace
     if (a === 0 || b === 0) {
       const other = a === 0 ? b : a;
       this.events.push(a === 0 ? `War declared on ${this.civs[other].name}` : `${this.civs[other].name} has declared war on you!`);
@@ -454,6 +458,174 @@ export class Game {
     }
     prey.sort((a, b) => this._mil(a) - this._mil(b));
     if (prey.length) this.declareWar(owner, prey[0]);
+  }
+
+  // --- diplomatic deals (resource / gold trade) -----------------------------
+  // A deal moves goods between two nations at peace. Each side may stake a gold
+  // lump, gold-per-turn, a science lump, and resource leases. `term` is how many
+  // turns the per-turn streams and resource leases run (0 = an instant lump-only
+  // swap). Shape:
+  //   { id, a, b, term, turnsLeft,
+  //     give: { gold, goldPerTurn, science, res:[ids] },   // a -> b
+  //     take: { gold, goldPerTurn, science, res:[ids] } }  // b -> a
+
+  // Distinct resource ids a civ holds on its own territory, with a count each.
+  civResources(owner) {
+    const counts = {};
+    for (const c of this.cities) {
+      if (c.owner !== owner || !c.tiles) continue;
+      for (const k of c.tiles) {
+        const t = this.tiles.get(k);
+        if (t && t.resource) counts[t.resource] = (counts[t.resource] || 0) + 1;
+      }
+    }
+    return counts;
+  }
+
+  // How many copies of `res` a civ can still lease out — owned tiles minus copies
+  // already promised away in active deals.
+  _resAvailable(owner, res) {
+    const owned = this.civResources(owner)[res] || 0;
+    let leasedOut = 0;
+    for (const d of this.deals) {
+      if (d.a === owner) leasedOut += d.give.res.filter(r => r === res).length;
+      if (d.b === owner) leasedOut += d.take.res.filter(r => r === res).length;
+    }
+    return owned - leasedOut;
+  }
+
+  // The set of resource TYPES a civ has access to: any type it still controls a
+  // copy of, plus any type leased in from a partner. Access (not raw count) is
+  // what grants the empire-wide `trade` bonus, once per type.
+  resourceAccess(owner) {
+    const access = new Set();
+    const counts = this.civResources(owner);
+    for (const id in counts) if (this._resAvailable(owner, id) > 0) access.add(id);
+    for (const d of this.deals) {
+      if (d.a === owner) d.take.res.forEach(r => access.add(r)); // a leases in `take`
+      if (d.b === owner) d.give.res.forEach(r => access.add(r)); // b leases in `give`
+    }
+    return access;
+  }
+
+  // Empire-wide gold/science from the resource types a civ has access to.
+  resourceIncome(owner) {
+    const out = { gold: 0, science: 0 };
+    for (const id of this.resourceAccess(owner)) {
+      const tr = RESOURCES[id]?.trade;
+      if (tr) { out.gold += tr.gold || 0; out.science += tr.science || 0; }
+    }
+    return out;
+  }
+
+  // Per-turn gold a deal pays `owner` (negative = owner pays out). Resource
+  // leases are NOT counted here — their worth shows up via resourceIncome.
+  _dealFlow(owner) {
+    let gold = 0;
+    for (const d of this.deals) {
+      if (d.a === owner) gold += d.take.goldPerTurn - d.give.goldPerTurn;
+      else if (d.b === owner) gold += d.give.goldPerTurn - d.take.goldPerTurn;
+    }
+    return gold;
+  }
+
+  // Net per-turn gold-equivalent value of a deal to `owner`, plus the up-front
+  // lump. Positive `perTurn` means owner profits each turn.
+  dealValue(deal, owner) {
+    const incoming = owner === deal.b ? deal.give : deal.take; // what owner receives
+    const outgoing = owner === deal.b ? deal.take : deal.give; // what owner gives
+    const resVal = (basket, receiver) => {
+      let v = 0;
+      for (const id of basket.res) {
+        if (receiver && this.resourceAccess(owner).has(id)) continue; // already have the type
+        const tr = RESOURCES[id]?.trade;
+        if (tr) v += (tr.gold || 0) + (tr.science || 0) * 1.2;
+      }
+      return v;
+    };
+    const perTurn = (incoming.goldPerTurn + resVal(incoming, true))
+                  - (outgoing.goldPerTurn + resVal(outgoing, false));
+    const lump = (incoming.gold + incoming.science * 1.2)
+               - (outgoing.gold + outgoing.science * 1.2);
+    return { perTurn, lump, total: lump + perTurn * (deal.term || 0) };
+  }
+
+  // Would the AI civ `owner` (the recipient, deal.b) accept this proposal? It
+  // wants a clear profit and must be able to pay any up-front gold it owes.
+  aiWouldAccept(deal) {
+    const owner = deal.b;
+    if (this.atWar(deal.a, owner)) return false;
+    if (this.civs[owner].treasury.gold < deal.take.gold) return false; // can't cover its lump
+    const v = this.dealValue(deal, owner);
+    return v.total >= 12 && v.perTurn >= -1; // demands net profit, no bleeding per turn
+  }
+
+  // Normalise a loosely-built basket so every field exists.
+  _basket(b) {
+    return { gold: Math.max(0, Math.floor(b?.gold || 0)), goldPerTurn: Math.max(0, Math.floor(b?.goldPerTurn || 0)),
+      science: Math.max(0, Math.floor(b?.science || 0)), res: Array.isArray(b?.res) ? b.res.slice() : [] };
+  }
+
+  // Validate, settle the lumps, and (if it runs over time) register the deal.
+  // Returns { ok, deal?, msg? }. `a` proposes; `b` is the partner.
+  proposeDeal(a, b, give, take, term) {
+    if (a === b || this.atWar(a, b) || !this.isCivAlive(b)) return { ok: false, msg: 'No deal possible.' };
+    give = this._basket(give); take = this._basket(take); term = Math.max(0, Math.floor(term || 0));
+    // The proposer must actually own the resources & gold it offers.
+    for (const id of give.res) if (this._resAvailable(a, id) <= 0) return { ok: false, msg: `You have no spare ${RESOURCES[id]?.name || id}.` };
+    for (const id of take.res) if (this._resAvailable(b, id) <= 0) return { ok: false, msg: `They have no spare ${RESOURCES[id]?.name || id}.` };
+    if (this.civs[a].treasury.gold < give.gold) return { ok: false, msg: 'You cannot afford that.' };
+    if ((give.res.length || take.res.length || give.goldPerTurn || take.goldPerTurn) && term <= 0)
+      return { ok: false, msg: 'Resource and per-turn deals need a term.' };
+    const deal = { id: this.dealSeq++, a, b, term, turnsLeft: term, give, take };
+    // Settle up-front lumps immediately.
+    this.civs[a].treasury.gold += take.gold - give.gold;
+    this.civs[b].treasury.gold += give.gold - take.gold;
+    this.civs[a].treasury.science += take.science - give.science;
+    this.civs[b].treasury.science += give.science - take.science;
+    if (term > 0) this.deals.push(deal); // streams & leases persist
+    return { ok: true, deal };
+  }
+
+  _cancelDealsBetween(a, b) {
+    this.deals = this.deals.filter(d => !((d.a === a && d.b === b) || (d.a === b && d.b === a)));
+  }
+
+  // End a running deal early (either party may walk away).
+  cancelDeal(id) {
+    const d = this.deals.find(x => x.id === id);
+    if (!d) return false;
+    this.deals = this.deals.filter(x => x.id !== id);
+    if (d.a === 0 || d.b === 0) {
+      const other = d.a === 0 ? d.b : d.a;
+      this.events.push(`Trade deal with ${this.civs[other].name} ended`);
+    }
+    return true;
+  }
+
+  // Pay out per-turn streams and age every deal. A party that cannot cover what
+  // it owes defaults and the deal collapses. Called once per turn.
+  _processDeals() {
+    const live = [];
+    for (const d of this.deals) {
+      const aPays = d.give.goldPerTurn, bPays = d.take.goldPerTurn;
+      if (this.civs[d.a].treasury.gold < aPays || this.civs[d.b].treasury.gold < bPays) {
+        if (d.a === 0 || d.b === 0) {
+          const other = d.a === 0 ? d.b : d.a;
+          this.events.push(`Trade deal with ${this.civs[other].name} defaulted`);
+        }
+        continue; // dropped
+      }
+      this.civs[d.a].treasury.gold += bPays - aPays;
+      this.civs[d.b].treasury.gold += aPays - bPays;
+      d.turnsLeft--;
+      if (d.turnsLeft > 0) live.push(d);
+      else if (d.a === 0 || d.b === 0) {
+        const other = d.a === 0 ? d.b : d.a;
+        this.events.push(`Trade deal with ${this.civs[other].name} expired`);
+      }
+    }
+    this.deals = live;
   }
 
   // --- barbarians -----------------------------------------------------------
@@ -603,6 +775,9 @@ export class Game {
       const y = this.cityYields(c);
       inc.food += y.food; inc.prod += y.prod; inc.gold += y.gold; inc.science += y.science; inc.culture += y.culture;
     }
+    const ri = this.resourceIncome(owner); // empire bonus from connected resources
+    inc.gold += ri.gold + this._dealFlow(owner); // + net per-turn from trade deals
+    inc.science += ri.science;
     return inc;
   }
 
@@ -846,6 +1021,10 @@ export class Game {
       civ.treasury.science += y.science * mul;
       civ.treasury.culture += y.culture * mul;
     }
+    const ri = this.resourceIncome(owner); // empire-wide bonus from connected resources
+    const rmul = owner === 0 ? 1 : this._diff.mul;
+    civ.treasury.gold += ri.gold * rmul;
+    civ.treasury.science += ri.science * rmul;
     this._processResearch(civ);
     this._processCivics(civ);
     this._advanceAge(owner);
@@ -890,6 +1069,8 @@ export class Game {
       wars: [...this.wars],
       wonders: [...this.wonders],
       tradeRoutes: this.tradeRoutes.map(r => ({ from: [r.from.q, r.from.r], to: [r.to.q, r.to.r], gold: r.gold, science: r.science, owner: r.owner })),
+      deals: this.deals.map(d => ({ id: d.id, a: d.a, b: d.b, term: d.term, turnsLeft: d.turnsLeft, give: { ...d.give, res: [...d.give.res] }, take: { ...d.take, res: [...d.take.res] } })),
+      dealSeq: this.dealSeq,
       barbCamps: this.barbCamps.map(c => ({ q: c.q, r: c.r })),
       year: this.year,
       age: this.age,
@@ -958,6 +1139,9 @@ export class Game {
       const to = this.cities.find(c => c.q === r.to[0] && c.r === r.to[1]);
       return from && to ? { from, to, gold: r.gold, science: r.science, owner: r.owner } : null;
     }).filter(Boolean);
+    this.deals = (data.deals || []).map(d => ({ id: d.id, a: d.a, b: d.b, term: d.term, turnsLeft: d.turnsLeft,
+      give: this._basket(d.give), take: this._basket(d.take) }));
+    this.dealSeq = data.dealSeq || (this.deals.reduce((m, d) => Math.max(m, d.id), 0) + 1);
     // Re-link each caravan to the route object it runs (units restored in order).
     data.units.forEach((ud, i) => {
       const u = this.units[i];
@@ -1272,6 +1456,7 @@ export class Game {
     for (let o = 1; o < this.civs.length; o++) this._processEconomy(o); // AI economies
     this._processEconomy(0); // player economy
     this._processReligion();
+    this._processDeals(); // pay out trade-deal streams, age & expire deals
     this.income = this.computeIncome(0);
 
     this.turn++;

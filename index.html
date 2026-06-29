@@ -152,6 +152,39 @@
     .choice-opt:hover { border-color: #6fd0e8; background: rgba(42,62,84,0.95); }
     .choice-opt b { font-size: 15px; }
     .choice-opt span { font-size: 12px; opacity: 0.75; }
+    /* --- diplomatic trade-deal window --- */
+    #deal { position: absolute; inset: 0; display: none; align-items: center; justify-content: center;
+      background: rgba(6,9,14,0.78); backdrop-filter: blur(4px); z-index: 27; pointer-events: auto; }
+    #deal.open { display: flex; }
+    #deal .deal-card { background: rgba(16,22,33,0.97); border: 1px solid rgba(217,184,92,0.5); border-radius: 12px;
+      padding: 20px 24px; max-width: 94vw; width: 560px; box-shadow: 0 10px 50px rgba(0,0,0,0.6); }
+    #deal h2 { font-size: 20px; margin: 0 0 14px; color: #e6d27a; text-align: center; }
+    .deal-cols { display: grid; grid-template-columns: 1fr 1fr; gap: 14px; }
+    .deal-col { background: rgba(10,14,20,0.6); border: 1px solid rgba(120,160,210,0.22); border-radius: 8px; padding: 10px 12px; }
+    .deal-col h4 { margin: 0 0 8px; font-size: 13px; letter-spacing: 1px; text-transform: uppercase; opacity: 0.8; }
+    .deal-col h4#deal-them-h { color: #e6d27a; }
+    .deal-line { display: flex; align-items: center; justify-content: space-between; gap: 8px; margin: 5px 0; font-size: 13px; color: #cfe0f5; }
+    .deal-line input[type=number] { width: 64px; background: rgba(30,40,55,0.9); color: #fff; border: 1px solid rgba(120,160,210,0.35);
+      border-radius: 5px; padding: 3px 6px; font-size: 13px; }
+    .deal-res { display: flex; flex-wrap: wrap; gap: 5px; margin-top: 6px; }
+    .deal-res label { display: inline-flex; align-items: center; gap: 3px; font-size: 12px; padding: 3px 7px; cursor: pointer;
+      background: rgba(30,40,55,0.7); border: 1px solid rgba(120,160,210,0.25); border-radius: 12px; }
+    .deal-res label.on { border-color: #6fd0e8; background: rgba(42,62,84,0.95); }
+    .deal-res input { display: none; }
+    .deal-res .none { opacity: 0.45; font-size: 12px; }
+    .deal-foot { display: flex; align-items: center; justify-content: space-between; gap: 12px; margin-top: 14px; }
+    .deal-term { font-size: 13px; color: #cfe0f5; display: inline-flex; align-items: center; gap: 6px; }
+    .deal-term select { background: rgba(30,40,55,0.9); color: #fff; border: 1px solid rgba(120,160,210,0.35); border-radius: 5px; padding: 3px 6px; }
+    .deal-verdict { font-size: 13px; font-weight: 600; text-align: right; flex: 1; }
+    .deal-actions { display: flex; gap: 8px; margin-top: 16px; }
+    .deal-actions button { flex: 1; border-radius: 8px; padding: 10px; font-size: 14px; font-weight: 600; cursor: pointer; }
+    .deal-go { background: linear-gradient(180deg, #3a7d44, #2c5e34); color: #fff; border: 1px solid #4d9e5a; }
+    .deal-go:disabled { background: #2a3340; color: #7e8794; border-color: #39424f; cursor: default; }
+    .deal-x { background: rgba(40,30,30,0.8); color: #e8c0c0; border: 1px solid rgba(180,90,90,0.4); }
+    #diplo-body .deal-btn { margin-left: 6px; }
+    .deal-active { font-size: 12px; color: #bcd; opacity: 0.9; margin: 3px 0 0 26px; display: flex; align-items: center; justify-content: space-between; gap: 8px; }
+    .deal-active .end { font-size: 11px; padding: 1px 7px; }
+
     @keyframes eraFade {
       0% { opacity: 0; transform: scale(0.92); }
       12% { opacity: 1; transform: scale(1); }
@@ -307,6 +340,30 @@
       <h2 id="go-title">—</h2>
       <p id="go-reason"></p>
       <button id="go-new">New Game</button>
+    </div>
+  </div>
+
+  <div id="deal">
+    <div class="deal-card">
+      <h2 id="deal-title">Trade</h2>
+      <div class="deal-cols">
+        <div class="deal-col"><h4 id="deal-you-h">You give</h4><div id="deal-you"></div></div>
+        <div class="deal-col"><h4 id="deal-them-h">They give</h4><div id="deal-them"></div></div>
+      </div>
+      <div class="deal-foot">
+        <label class="deal-term">Term
+          <select id="deal-term">
+            <option value="0">One-time</option>
+            <option value="10">10 turns</option>
+            <option value="30" selected>30 turns</option>
+          </select>
+        </label>
+        <div id="deal-verdict" class="deal-verdict"></div>
+      </div>
+      <div class="deal-actions">
+        <button id="deal-propose" class="deal-go">Propose</button>
+        <button id="deal-close" class="deal-x">Cancel</button>
+      </div>
     </div>
   </div>
 

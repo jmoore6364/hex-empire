@@ -2,7 +2,7 @@
 // caravans, plunder, economy, fog, save/load, AI) headlessly via a stubbed
 // renderer. Complements logic.test.mjs (pure modules) and the in-browser
 // headless smoke test (rendering).
-import { makeGame, foundAt, spawnTrader, runner, key, distance } from './harness.mjs';
+import { makeGame, foundAt, spawnTrader, landNear, runner, key, distance } from './harness.mjs';
 import { findStartTile, connectedLand } from '../src/worldgen.js';
 import { UNIT_TYPES } from '../src/units.js';
 import { TECHS } from '../src/tech.js';
@@ -369,6 +369,126 @@ function twoCities(game, world, owner = 0) {
   const { game: g2 } = makeGame();
   g2.restore(snap);
   check('save/load preserves the space launch', g2.spaceLaunched === 0);
+}
+
+// --- diplomatic trade deals (resources & gold) -------------------------------
+// Force a resource onto one of a city's owned tiles.
+function giveResource(game, city, res) {
+  const k = [...city.tiles].find(tk => { const t = game.tiles.get(tk); return t && !t.resource; });
+  game.tiles.get(k).resource = res;
+  return k;
+}
+// Found a city for `owner` a few hexes from the player's start (so both nations
+// exist — proposeDeal requires the partner to be alive).
+function foundRival(game, world, owner = 1) {
+  const s = findStartTile(world);
+  const spot = landNear(game, s.q, s.r, 4, 12);
+  return foundAt(game, owner, spot.q, spot.r);
+}
+
+// Resource ownership feeds an empire-wide bonus.
+{
+  const { game, world } = makeGame();
+  const s = findStartTile(world);
+  const cap = foundAt(game, 0, s.q, s.r);
+  // Clear any worldgen resources already inside the capital's borders so the
+  // test measures only what we add.
+  for (const tk of cap.tiles) { const t = game.tiles.get(tk); if (t) t.resource = null; }
+  const ironN = game.civResources(0).iron || 0;
+  giveResource(game, cap, 'iron'); // iron trade bonus = +2 gold, +2 science
+  check('civResources counts owned resource tiles', (game.civResources(0).iron || 0) === ironN + 1);
+  check('resourceAccess includes an owned type', game.resourceAccess(0).has('iron'));
+  const ri = game.resourceIncome(0);
+  check('resourceIncome reflects the resource trade bonus', ri.gold === 2 && ri.science === 2);
+  giveResource(game, cap, 'iron'); // a second iron — duplicate type, no extra bonus
+  check('a duplicate resource type adds no extra bonus', game.resourceIncome(0).gold === 2);
+}
+
+// A one-time lump swap settles immediately and leaves no standing deal.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  game.civs[0].treasury.gold = 100; game.civs[1].treasury.science = 40;
+  const res = game.proposeDeal(0, 1, { gold: 60 }, { science: 30 }, 0);
+  check('a one-time lump swap succeeds', res.ok);
+  check('lump gold leaves the proposer', game.civs[0].treasury.gold === 40);
+  check('lump gold reaches the partner', game.civs[1].treasury.gold === 60);
+  check('lump science crosses back', game.civs[0].treasury.science === 30 && game.civs[1].treasury.science === 10);
+  check('an instant swap stores no standing deal', game.deals.length === 0);
+}
+
+// A resource lease runs for its term, transfers access, pays per turn, reverts.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  giveResource(game, cap, 'gold'); // gold trade bonus = +5 gold
+  game.civs[1].treasury.gold = 100;
+  const res = game.proposeDeal(0, 1, { res: ['gold'] }, { goldPerTurn: 8 }, 3);
+  check('a resource-for-gold/turn lease is accepted', res.ok && game.deals.length === 1);
+  check('the partner gains access to the leased resource', game.resourceAccess(1).has('gold'));
+  check('leasing your only copy costs you its access', !game.resourceAccess(0).has('gold'));
+  check('the partner now earns the resource bonus', game.resourceIncome(1).gold === 5);
+  const before0 = game.civs[0].treasury.gold, before1 = game.civs[1].treasury.gold;
+  game._processDeals();
+  check('the lessee pays gold per turn', game.civs[0].treasury.gold === before0 + 8 && game.civs[1].treasury.gold === before1 - 8);
+  game._processDeals(); game._processDeals(); // term was 3
+  check('the deal expires after its term', game.deals.length === 0);
+  check('resource access reverts to the owner on expiry', game.resourceAccess(0).has('gold') && !game.resourceAccess(1).has('gold'));
+}
+
+// The AI weighs a proposal: it takes a profitable one, refuses a lopsided one.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  giveResource(game, cap, 'gold');
+  game.civs[1].treasury.gold = 500;
+  const good = { id: 0, a: 0, b: 1, term: 20, turnsLeft: 20, give: game._basket({ res: ['gold'] }), take: game._basket({ goldPerTurn: 2 }) };
+  check('the AI accepts a deal that profits it', game.aiWouldAccept(good));
+  const bad = { id: 0, a: 0, b: 1, term: 20, turnsLeft: 20, give: game._basket({ goldPerTurn: 1 }), take: game._basket({ gold: 400 }) };
+  check('the AI refuses a deal that bleeds it', !game.aiWouldAccept(bad));
+}
+
+// War tears up any standing deal between the two nations.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  giveResource(game, cap, 'iron');
+  game.civs[1].treasury.gold = 100;
+  game.proposeDeal(0, 1, { res: ['iron'] }, { goldPerTurn: 5 }, 10);
+  check('a deal is standing before war', game.deals.length === 1);
+  game.declareWar(0, 1);
+  check('declaring war cancels the deal', game.deals.length === 0);
+}
+
+// A party that cannot pay its per-turn obligation defaults and the deal dies.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  giveResource(game, cap, 'iron');
+  game.civs[1].treasury.gold = 4; // can't cover a 5/turn obligation
+  game.proposeDeal(0, 1, { res: ['iron'] }, { goldPerTurn: 5 }, 10);
+  game._processDeals();
+  check('an unaffordable per-turn deal defaults away', game.deals.length === 0);
+}
+
+// Save / load round-trips standing deals.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  giveResource(game, cap, 'iron');
+  game.civs[1].treasury.gold = 100;
+  game.proposeDeal(0, 1, { res: ['iron'] }, { goldPerTurn: 5 }, 7);
+  const snap = JSON.parse(JSON.stringify(game.serialize()));
+  const { game: g2, world: w2 } = makeGame();
+  // restore needs the same cities present; rebuild from the snapshot's data
+  g2.restore(snap);
+  check('save/load preserves the standing deal', g2.deals.length === 1 && g2.deals[0].give.res[0] === 'iron');
+  check('restored deal keeps its term countdown', g2.deals[0].turnsLeft === 7);
 }
 
 done();
