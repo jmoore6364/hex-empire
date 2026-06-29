@@ -491,4 +491,80 @@ function foundRival(game, world, owner = 1) {
   check('restored deal keeps its term countdown', g2.deals[0].turnsLeft === 7);
 }
 
+// Renting out a DUPLICATE resource costs the owner no access, so it is free to
+// trade — this is what lets both sides of an AI deal profit.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  giveResource(game, cap, 'iron'); giveResource(game, cap, 'iron'); // two copies
+  const deal = { a: 1, b: 0, term: 10, turnsLeft: 10, give: game._basket({ goldPerTurn: 3 }), take: game._basket({ res: ['iron'] }) };
+  const v = game.dealValue(deal, 0); // player leases out one of two irons
+  check('leasing a duplicate resource costs no access value', v.perTurn === 3); // +3 gold, no resource cost
+  giveResource(game, cap, 'gold'); // single copy of gold
+  const deal2 = { a: 1, b: 0, term: 10, turnsLeft: 10, give: game._basket({ goldPerTurn: 3 }), take: game._basket({ res: ['gold'] }) };
+  const v2 = game.dealValue(deal2, 0); // leasing the only gold copy costs its bonus (5)
+  check('leasing your last copy costs its bonus', v2.perTurn === 3 - 5);
+}
+
+// AI civs trade with each other automatically when it profits both.
+{
+  const { game, world } = makeGame();
+  const a = foundAt(game, 1, findStartTile(world).q, findStartTile(world).r);
+  const b = foundRival(game, world, 2);
+  // Civ 2 controls two irons (a spare to rent); civ 1 has none.
+  giveResource(game, b, 'iron'); giveResource(game, b, 'iron');
+  game.civs[1].treasury.gold = 200; game.civs[2].treasury.gold = 200;
+  game.turn = 3; // _aiTryTrade fires when (turn + owner) % 4 === 0 (owner 1)
+  game._aiTryTrade(1); // owner 1 buys iron access from owner 2
+  check('AI buys a resource type it lacks from a peer', game.deals.length === 1);
+  check('the buying AI now has access to the resource', game.resourceAccess(1).has('iron'));
+  check('the selling AI keeps access via its duplicate', game.resourceAccess(2).has('iron'));
+}
+
+// An AI floats a standing offer to the player; accepting settles it.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  const rival = foundRival(game, world, 1);
+  giveResource(game, rival, 'iron'); giveResource(game, rival, 'iron'); // AI can spare iron, player lacks it
+  game.civs[1].treasury.gold = 200; game.civs[0].treasury.gold = 200;
+  game.turn = 5; // _aiOfferToPlayer fires when (turn + owner) % 6 === 0 (owner 1)
+  game._aiOfferToPlayer(1);
+  check('the AI queues a trade offer to the player', game.dealOffers.length === 1);
+  check('the offer is flagged from the proposing civ', game.dealOffers[0].from === 1);
+  const id = game.dealOffers[0].id;
+  const res = game.acceptOffer(id);
+  check('accepting the offer settles a deal', res.ok && game.deals.length === 1);
+  check('an accepted offer leaves the queue', game.dealOffers.length === 0);
+  check('the player gains access to the offered resource', game.resourceAccess(0).has('iron'));
+}
+
+// Offers age out, and war clears them.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  game.dealOffers.push({ id: 1, a: 1, b: 0, term: 10, turnsLeft: 2, from: 1, give: game._basket({ res: ['iron'] }), take: game._basket({ goldPerTurn: 2 }) });
+  game._expireOffers();
+  check('an offer ticks down but survives one turn', game.dealOffers.length === 1 && game.dealOffers[0].turnsLeft === 1);
+  game.dealOffers[0].turnsLeft = 1; game._expireOffers();
+  check('an ignored offer expires', game.dealOffers.length === 0);
+  game.dealOffers.push({ id: 2, a: 1, b: 0, term: 10, turnsLeft: 5, from: 1, give: game._basket({ res: ['iron'] }), take: game._basket({ goldPerTurn: 2 }) });
+  game.declareWar(0, 1);
+  check('war clears any pending offer', game.dealOffers.length === 0);
+}
+
+// Offers survive save / load.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  foundRival(game, world, 1);
+  game.dealOffers.push({ id: 7, a: 1, b: 0, term: 10, turnsLeft: 5, from: 1, give: game._basket({ res: ['iron'] }), take: game._basket({ goldPerTurn: 2 }) });
+  const snap = JSON.parse(JSON.stringify(game.serialize()));
+  const { game: g2 } = makeGame();
+  g2.restore(snap);
+  check('save/load preserves a pending offer', g2.dealOffers.length === 1 && g2.dealOffers[0].from === 1);
+}
+
 done();

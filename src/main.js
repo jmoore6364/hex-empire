@@ -282,6 +282,11 @@ function renderDiplomacy() {
     h += `<div class="row"><span>${emblemSVG(game.civs[o].id, OWNER_COLOR[o], 18)}<span style="color:${ownerHex(o)}">${game.civs[o].name}</span></span>` +
       `<span>${war ? '⚔ War' : '🕊 Peace'}<button class="act" data-civ="${o}">${war ? 'Make Peace' : 'Declare War'}</button>` +
       `${war ? '' : `<button class="act deal-btn" data-deal-civ="${o}">🤝 Trade</button>`}</span></div>`;
+    // A standing offer this civ has made to the player — accept or decline.
+    for (const offer of game.dealOffers.filter(off => off.from === o)) {
+      h += `<div class="deal-offer"><span>Offers: ${describeDeal(offer)}</span>` +
+        `<span><button class="act ok" data-accept="${offer.id}">Accept</button><button class="act no" data-decline="${offer.id}">Decline</button></span></div>`;
+    }
     // Active deals with this civ.
     for (const d of game.deals.filter(d => (d.a === 0 && d.b === o) || (d.b === 0 && d.a === o))) {
       h += `<div class="deal-active"><span>${describeDeal(d)} · ${d.turnsLeft}t</span><button class="act end" data-end-deal="${d.id}">End</button></div>`;
@@ -299,6 +304,15 @@ function renderDiplomacy() {
     b.addEventListener('click', () => openDealWindow(+b.dataset.dealCiv)));
   document.querySelectorAll('#diplo-body [data-end-deal]').forEach(b =>
     b.addEventListener('click', () => { game.cancelDeal(+b.dataset.endDeal); game.income = game.computeIncome(); ui.refreshTopbar(game); renderDiplomacy(); }));
+  document.querySelectorAll('#diplo-body [data-accept]').forEach(b =>
+    b.addEventListener('click', () => {
+      const res = game.acceptOffer(+b.dataset.accept);
+      if (res.ok) { ui.toast('Trade accepted', '#7fd17f'); sound.play('city'); }
+      else ui.toast(res.msg, '#e88');
+      game.income = game.computeIncome(); ui.refreshTopbar(game); renderDiplomacy();
+    }));
+  document.querySelectorAll('#diplo-body [data-decline]').forEach(b =>
+    b.addEventListener('click', () => { game.declineOffer(+b.dataset.decline); renderDiplomacy(); }));
 }
 
 // One-line summary of a standing deal from the player's point of view.
@@ -442,9 +456,9 @@ function setTab(tab) {
 const sidebarOpen = () => sidebar.classList.contains('open');
 function openSidebar(tab) { sidebar.classList.add('open'); menuHandle.style.display = 'none'; setTab(tab || activeTab); }
 function closeSidebar() { sidebar.classList.remove('open'); menuHandle.style.display = ''; }
-// Nudge the handle when there's no research queued.
+// Nudge the handle when there's no research queued or a trade offer is waiting.
 function syncMenuHandle() {
-  const needs = !game.civs[0].research.queue.length && game.cities.some(c => c.owner === 0);
+  const needs = (!game.civs[0].research.queue.length && game.cities.some(c => c.owner === 0)) || game.dealOffers.length > 0;
   menuHandle.classList.toggle('attention', needs && !sidebarOpen());
 }
 

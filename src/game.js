@@ -61,6 +61,8 @@ export class Game {
     this.tradeRoutes = [];             // { from, to } city pairs, for rendering
     this.deals = [];                   // active diplomatic deals (resource/gold leases)
     this.dealSeq = 1;                  // monotonic id source for deals
+    this.dealOffers = [];              // pending trade offers an AI has made TO the player
+    this.offerSeq = 1;                 // monotonic id source for offers
     this.income = { food: 0, prod: 0, gold: 0, science: 0 }; // player (owner 0)
     this.events = [];                  // human-readable notices from the last turn
     this.gameOver = null;              // { win, reason } once the game is decided
@@ -529,36 +531,38 @@ export class Game {
     return gold;
   }
 
+  // Gold-equivalent worth of a resource type's empire bonus.
+  _resWorth(id) { const tr = RESOURCES[id]?.trade; return tr ? (tr.gold || 0) + (tr.science || 0) * 1.2 : 0; }
+
   // Net per-turn gold-equivalent value of a deal to `owner`, plus the up-front
-  // lump. Positive `perTurn` means owner profits each turn.
+  // lump. Positive `perTurn` means owner profits each turn. A leased-in resource
+  // is only worth something if owner lacks the type; leasing one OUT only costs
+  // owner if it is their last accessible copy (a duplicate is free to rent out).
   dealValue(deal, owner) {
     const incoming = owner === deal.b ? deal.give : deal.take; // what owner receives
     const outgoing = owner === deal.b ? deal.take : deal.give; // what owner gives
-    const resVal = (basket, receiver) => {
-      let v = 0;
-      for (const id of basket.res) {
-        if (receiver && this.resourceAccess(owner).has(id)) continue; // already have the type
-        const tr = RESOURCES[id]?.trade;
-        if (tr) v += (tr.gold || 0) + (tr.science || 0) * 1.2;
-      }
-      return v;
-    };
-    const perTurn = (incoming.goldPerTurn + resVal(incoming, true))
-                  - (outgoing.goldPerTurn + resVal(outgoing, false));
-    const lump = (incoming.gold + incoming.science * 1.2)
-               - (outgoing.gold + outgoing.science * 1.2);
+    const access = this.resourceAccess(owner);
+    let inRes = 0;
+    for (const id of incoming.res) if (!access.has(id)) inRes += this._resWorth(id);
+    let outRes = 0;
+    for (const id of outgoing.res) if (this._resAvailable(owner, id) <= 1) outRes += this._resWorth(id);
+    const perTurn = (incoming.goldPerTurn + inRes) - (outgoing.goldPerTurn + outRes);
+    const lump = (incoming.gold + incoming.science * 1.2) - (outgoing.gold + outgoing.science * 1.2);
     return { perTurn, lump, total: lump + perTurn * (deal.term || 0) };
   }
 
-  // Would the AI civ `owner` (the recipient, deal.b) accept this proposal? It
-  // wants a clear profit and must be able to pay any up-front gold it owes.
-  aiWouldAccept(deal) {
-    const owner = deal.b;
-    if (this.atWar(deal.a, owner)) return false;
-    if (this.civs[owner].treasury.gold < deal.take.gold) return false; // can't cover its lump
+  // Would `owner` (either party) want this deal? It must profit clearly, not
+  // bleed per turn, and be able to cover any up-front gold it owes.
+  _wantsDeal(deal, owner) {
+    if (this.atWar(deal.a, deal.b)) return false;
+    const owesLump = owner === deal.a ? deal.give.gold : deal.take.gold;
+    if (this.civs[owner].treasury.gold < owesLump) return false;
     const v = this.dealValue(deal, owner);
-    return v.total >= 12 && v.perTurn >= -1; // demands net profit, no bleeding per turn
+    return v.total >= 12 && v.perTurn >= -1;
   }
+
+  // Would the AI civ on the receiving end (deal.b) accept this proposal?
+  aiWouldAccept(deal) { return this._wantsDeal(deal, deal.b); }
 
   // Normalise a loosely-built basket so every field exists.
   _basket(b) {
@@ -589,6 +593,7 @@ export class Game {
 
   _cancelDealsBetween(a, b) {
     this.deals = this.deals.filter(d => !((d.a === a && d.b === b) || (d.a === b && d.b === a)));
+    this.dealOffers = this.dealOffers.filter(o => !((o.a === a && o.b === b) || (o.a === b && o.b === a)));
   }
 
   // End a running deal early (either party may walk away).
@@ -626,6 +631,87 @@ export class Game {
       }
     }
     this.deals = live;
+  }
+
+  // --- AI-initiated trade ----------------------------------------------------
+  // Build the "buyer leases a resource type it lacks for gold-per-turn" deal:
+  // `buyer` pays `seller` for access to `res`. Priced so both sides profit when
+  // the seller has a spare (duplicate) copy to rent out.
+  _resLeaseDeal(buyer, seller, res, term = 20) {
+    const worth = this._resWorth(res);
+    const price = Math.max(1, Math.floor(worth * 0.6)); // buyer keeps ~40% of the value
+    return { a: buyer, b: seller, term, turnsLeft: term,
+      give: this._basket({ goldPerTurn: price }), take: this._basket({ res: [res] }) };
+  }
+
+  // Find a resource `seller` can spare that `buyer` lacks (prefer duplicates so
+  // renting it out costs the seller no access). Returns the resource id or null.
+  _tradableResource(buyer, seller) {
+    const have = this.resourceAccess(buyer);
+    let fallback = null;
+    for (const id of TRADEABLE) {
+      if (have.has(id)) continue;
+      const spare = this._resAvailable(seller, id);
+      if (spare >= 2) return id;            // duplicate — free for the seller to rent
+      if (spare >= 1 && fallback == null) fallback = id;
+    }
+    return fallback;
+  }
+
+  // AI ↔ AI: once in a while an AI buys a resource type it lacks from a peer,
+  // auto-executed when the price profits both sides. Player deals go through the
+  // offer system instead (the player always chooses).
+  _aiTryTrade(owner) {
+    if ((this.turn + owner) % 4 !== 0) return;
+    for (let other = 1; other < this.civs.length; other++) {
+      if (other === owner || this.atWar(owner, other) || !this.isCivAlive(other)) continue;
+      const res = this._tradableResource(owner, other);
+      if (!res) continue;
+      const deal = this._resLeaseDeal(owner, other, res);
+      if (this._wantsDeal(deal, owner) && this._wantsDeal(deal, other)) {
+        this.proposeDeal(owner, other, deal.give, deal.take, deal.term);
+        return; // one trade per cadence keeps it measured
+      }
+    }
+  }
+
+  // AI → player: queue a standing offer the player can accept or decline. The AI
+  // either sells the player a type it lacks, or buys a spare type from the
+  // player — whichever the AI can make profitable for itself.
+  _aiOfferToPlayer(owner) {
+    if ((this.turn + owner) % 6 !== 0 || this.atWar(owner, 0) || !this.isCivAlive(0)) return;
+    if (this.dealOffers.some(o => o.a === owner)) return; // one pending offer per AI
+    let deal = null;
+    const sell = this._tradableResource(0, owner); // player lacks it, AI can spare it
+    if (sell) deal = this._resLeaseDeal(0, owner, sell); // player buys: a=0 pays, b=owner sells
+    else {
+      const buy = this._tradableResource(owner, 0); // AI lacks it, player can spare it
+      if (buy) deal = this._resLeaseDeal(owner, 0, buy); // AI buys: a=owner pays, b=0 sells
+    }
+    if (!deal) return;
+    // Only bother the player if the AI itself profits (its motivation) and the
+    // player at least breaks even (a credible offer worth showing).
+    if (!this._wantsDeal(deal, owner)) return;
+    const v = this.dealValue(deal, 0);
+    if (v.total < 0) return;
+    const offer = { id: this.offerSeq++, a: deal.a, b: deal.b, term: deal.term, turnsLeft: 8, give: deal.give, take: deal.take, from: owner };
+    this.dealOffers.push(offer);
+    this.events.push(`${this.civs[owner].name} proposes a trade`);
+  }
+
+  // Player accepts a standing AI offer: settle it like any proposed deal.
+  acceptOffer(id) {
+    const o = this.dealOffers.find(x => x.id === id);
+    if (!o) return { ok: false, msg: 'Offer gone.' };
+    this.dealOffers = this.dealOffers.filter(x => x.id !== id);
+    return this.proposeDeal(o.a, o.b, o.give, o.take, o.term);
+  }
+
+  declineOffer(id) { this.dealOffers = this.dealOffers.filter(x => x.id !== id); }
+
+  // Age out offers the player ignored.
+  _expireOffers() {
+    this.dealOffers = this.dealOffers.filter(o => --o.turnsLeft > 0);
   }
 
   // --- barbarians -----------------------------------------------------------
@@ -1071,6 +1157,8 @@ export class Game {
       tradeRoutes: this.tradeRoutes.map(r => ({ from: [r.from.q, r.from.r], to: [r.to.q, r.to.r], gold: r.gold, science: r.science, owner: r.owner })),
       deals: this.deals.map(d => ({ id: d.id, a: d.a, b: d.b, term: d.term, turnsLeft: d.turnsLeft, give: { ...d.give, res: [...d.give.res] }, take: { ...d.take, res: [...d.take.res] } })),
       dealSeq: this.dealSeq,
+      dealOffers: this.dealOffers.map(o => ({ id: o.id, a: o.a, b: o.b, term: o.term, turnsLeft: o.turnsLeft, from: o.from, give: { ...o.give, res: [...o.give.res] }, take: { ...o.take, res: [...o.take.res] } })),
+      offerSeq: this.offerSeq,
       barbCamps: this.barbCamps.map(c => ({ q: c.q, r: c.r })),
       year: this.year,
       age: this.age,
@@ -1142,6 +1230,9 @@ export class Game {
     this.deals = (data.deals || []).map(d => ({ id: d.id, a: d.a, b: d.b, term: d.term, turnsLeft: d.turnsLeft,
       give: this._basket(d.give), take: this._basket(d.take) }));
     this.dealSeq = data.dealSeq || (this.deals.reduce((m, d) => Math.max(m, d.id), 0) + 1);
+    this.dealOffers = (data.dealOffers || []).map(o => ({ id: o.id, a: o.a, b: o.b, term: o.term, turnsLeft: o.turnsLeft, from: o.from,
+      give: this._basket(o.give), take: this._basket(o.take) }));
+    this.offerSeq = data.offerSeq || (this.dealOffers.reduce((m, o) => Math.max(m, o.id), 0) + 1);
     // Re-link each caravan to the route object it runs (units restored in order).
     data.units.forEach((ud, i) => {
       const u = this.units[i];
@@ -1457,6 +1548,7 @@ export class Game {
     this._processEconomy(0); // player economy
     this._processReligion();
     this._processDeals(); // pay out trade-deal streams, age & expire deals
+    this._expireOffers(); // drop AI offers the player let sit
     this.income = this.computeIncome(0);
 
     this.turn++;
@@ -1508,6 +1600,9 @@ export class Game {
 
     // Diplomacy: pick fights it can win, sue for peace when outmatched.
     this._aiDiplomacy(owner);
+    // Trade: deal with peer AIs directly, and float an offer to the player.
+    this._aiTryTrade(owner);
+    this._aiOfferToPlayer(owner);
 
     // Production: defend threatened cities first, then expand, build, and arm.
     const myCities = this.cities.filter(c => c.owner === owner);
