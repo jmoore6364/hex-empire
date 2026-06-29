@@ -78,6 +78,7 @@ export class Game {
       this.civs.push({
         owner: i, name: (cfg && cfg.name) || CIV_NAMES[i] || `Civ ${i}`,
         id: (cfg && cfg.id) || null,   // civilization id, for unique units
+        ruler: (cfg && cfg.ruler) || null, // the ruler's name+title, for portraits/diplomacy
         trait: (cfg && cfg.trait) || null,
         age: 0,                        // most advanced tech era reached
         gpp: 0, gpEarned: 0, generalTurns: 0, greatPeople: [], // Great People
@@ -1143,7 +1144,7 @@ export class Game {
         route: u.route ? { from: [u.route.from.q, u.route.from.r], to: [u.route.to.q, u.route.to.r] } : undefined, legTo: u.legTo })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], religion: c.religion, borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
-        name: v.name, id: v.id, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
+        name: v.name, id: v.id, ruler: v.ruler, trait: v.trait, age: v.age, color: OWNER_COLOR[i],
         gpp: v.gpp, gpEarned: v.gpEarned, generalTurns: v.generalTurns, greatPeople: [...(v.greatPeople || [])],
         religion: v.religion,
         treasury: { ...v.treasury },
@@ -1214,6 +1215,7 @@ export class Game {
       v.policies = cd.policies || [];
       if (cd.name) v.name = cd.name;
       if ('id' in cd) v.id = cd.id;
+      if (cd.ruler) v.ruler = cd.ruler;
       if ('trait' in cd) v.trait = cd.trait;
       v.age = cd.age || 0;
       v.gpp = cd.gpp || 0; v.gpEarned = cd.gpEarned || 0; v.generalTurns = cd.generalTurns || 0; v.greatPeople = cd.greatPeople || [];

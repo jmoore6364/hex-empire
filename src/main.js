@@ -21,8 +21,12 @@ import { HealthBars } from './health.js';
 import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
 import { loadUnitModels } from './models.js';
-import { CIVILIZATIONS } from './civilizations.js';
+import { CIVILIZATIONS, CIV_BY_ID } from './civilizations.js';
 import { emblemSVG } from './emblems.js';
+import { portraitSVG } from './portraits.js';
+
+// A civ's ruler name+title (falls back to the civ name for pre-portrait saves).
+const rulerOf = (o) => game.civs[o].ruler || (CIV_BY_ID[game.civs[o].id] || {}).ruler || game.civs[o].name;
 
 const FOG_REF = 30; // fog/shadow frustum sized for the largest map; world radius is chosen in the menu
 
@@ -40,7 +44,8 @@ function chooseStartOptions() {
     CIVILIZATIONS.forEach((c, idx) => {
       const card = document.createElement('button');
       card.className = 'civ-card' + (idx === 0 ? ' sel' : '');
-      card.innerHTML = `${emblemSVG(c.id, c.color, 40)}<b>${c.name}</b><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span><span class="trd">⚔ ${c.unique}</span>`;
+      card.innerHTML = `<span class="por">${portraitSVG(c.id, c.color, 56)}${emblemSVG(c.id, c.color, 22)}</span>` +
+        `<b>${c.name}</b><span class="rl">${c.ruler}</span><span class="tr">${c.trait.name}</span><span class="trd">${c.trait.desc}</span><span class="trd">⚔ ${c.unique}</span>`;
       card.addEventListener('click', () => { chosen = c; cards.querySelectorAll('.civ-card').forEach(x => x.classList.remove('sel')); card.classList.add('sel'); });
       cards.appendChild(card);
     });
@@ -218,7 +223,7 @@ if (saveData) {
 game.income = game.computeIncome();
 game.recomputeFog();
 ui.refreshTopbar(game);
-document.getElementById('civemblem').innerHTML = emblemSVG(game.civs[0].id, OWNER_COLOR[0], 20);
+document.getElementById('civemblem').innerHTML = portraitSVG(game.civs[0].id, OWNER_COLOR[0], 22) + emblemSVG(game.civs[0].id, OWNER_COLOR[0], 16);
 ui.hideLoading();
 
 // Game-over overlay.
@@ -279,7 +284,8 @@ function renderDiplomacy() {
   for (let o = 1; o < game.civs.length; o++) {
     if (!game.isCivAlive(o)) continue;
     const war = game.atWar(0, o);
-    h += `<div class="row"><span>${emblemSVG(game.civs[o].id, OWNER_COLOR[o], 18)}<span style="color:${ownerHex(o)}">${game.civs[o].name}</span></span>` +
+    h += `<div class="row"><span class="diplo-civ">${portraitSVG(game.civs[o].id, OWNER_COLOR[o], 30)}` +
+      `<span class="diplo-nm"><b style="color:${ownerHex(o)}">${rulerOf(o)}</b><i>${game.civs[o].name} · ${game.civs[o].trait ? game.civs[o].trait.name : ''}</i></span></span>` +
       `<span>${war ? '⚔ War' : '🕊 Peace'}<button class="act" data-civ="${o}">${war ? 'Make Peace' : 'Declare War'}</button>` +
       `${war ? '' : `<button class="act deal-btn" data-deal-civ="${o}">🤝 Trade</button>`}</span></div>`;
     // A standing offer this civ has made to the player — accept or decline.
@@ -382,7 +388,7 @@ function updateVerdict() {
 
 function openDealWindow(o) {
   dealCiv = o;
-  document.getElementById('deal-title').innerHTML = `Trade with ${emblemSVG(game.civs[o].id, OWNER_COLOR[o], 18)} ${game.civs[o].name}`;
+  document.getElementById('deal-title').innerHTML = `${portraitSVG(game.civs[o].id, OWNER_COLOR[o], 28)} Trade with ${rulerOf(o)} <i style="opacity:.6">of ${game.civs[o].name}</i>`;
   document.getElementById('deal-you').innerHTML = dealColumn('you', 0);
   document.getElementById('deal-them').innerHTML = dealColumn('them', o);
   document.getElementById('deal-term').value = '30';

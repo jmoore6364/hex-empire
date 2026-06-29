@@ -14,6 +14,8 @@ import { cityYields } from '../src/economy.js';
 import { CIVICS, GOVERNMENTS, POLICIES, ERAS as CIVIC_ERAS, canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
 import { defenseMultiplier, resolveAttack } from '../src/combat.js';
+import { CIVILIZATIONS, CIV_BY_ID } from '../src/civilizations.js';
+import { portraitSVG } from '../src/portraits.js';
 
 let passed = 0, failed = 0;
 function check(name, cond) {
@@ -387,6 +389,30 @@ check('a Monument adds flat culture', (() => {
   // wiring sanity against the catalogue
   check('researching every civic unlocks every policy', availablePolicies(new Set(ids)).length === pols.length);
   check('researching every civic unlocks every gated government', availableGovernments(new Set(ids)).length === govs.length);
+}
+
+// --- ruler names & procedural portraits ---
+{
+  check('every civ has a ruler name with a title', CIVILIZATIONS.every(c => typeof c.ruler === 'string' && c.ruler.includes(' ')));
+  check('ruler names are unique', new Set(CIVILIZATIONS.map(c => c.ruler)).size === CIVILIZATIONS.length);
+  check('CIV_BY_ID carries the ruler', CIVILIZATIONS.every(c => CIV_BY_ID[c.id].ruler === c.ruler));
+
+  const svgs = CIVILIZATIONS.map(c => portraitSVG(c.id, c.color, 40));
+  check('portraitSVG returns a well-formed svg for every civ',
+    svgs.every(s => s.startsWith('<svg') && s.trimEnd().endsWith('</svg>') && s.includes('class="portrait"')));
+  check('each portrait embeds the civ colour', CIVILIZATIONS.every((c, i) => {
+    const lh = `#${(c.color >> 16 & 255).toString(16).padStart(2, '0')}${(c.color >> 8 & 255).toString(16).padStart(2, '0')}${(c.color & 255).toString(16).padStart(2, '0')}`;
+    return svgs[i].includes(lh);
+  }));
+  check('portraits are deterministic', CIVILIZATIONS.every(c => portraitSVG(c.id, c.color, 40) === portraitSVG(c.id, c.color, 40)));
+  check('every civ gets visually distinct headwear (unique markup)', new Set(svgs).size === svgs.length);
+  check('portrait honours the requested size', portraitSVG('azure', 0x3a78d0, 64).includes('width="64"'));
+  check('an unknown civ id still renders a fallback portrait', (() => {
+    const s = portraitSVG('zzz-unknown', 0x808080, 40);
+    return s.startsWith('<svg') && s.includes('</svg>');
+  })());
+  // ids are unique per svg (clipPath/gradient) so two portraits can coexist in one DOM
+  check('portrait gradient/clip ids are namespaced by civ id', CIVILIZATIONS.every((c, i) => svgs[i].includes(`pg_${c.id}`) && svgs[i].includes(`pc_${c.id}`)));
 }
 
 console.log(`\n${passed} passed, ${failed} failed`);
