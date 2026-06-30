@@ -890,6 +890,7 @@ export class Game {
     const items = [];
     for (const [id, def] of Object.entries(UNIT_TYPES)) {
       if (def.requires && !researched.has(def.requires)) continue;        // gated by tech
+      if (def.needsReligion && !civ.religion) continue;                   // needs a founded faith
       if (def.onlyCiv && def.onlyCiv !== civ.id) continue;                // another civ's unique
       items.push({ kind: 'unit', id, name: def.name, cost: def.cost, domain: def.domain });
     }
@@ -1140,7 +1141,7 @@ export class Game {
       turn: this.turn,
       cityNameIdx: this.cityNameIdx,
       explored: [...this.explored],
-      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked, home: u.home,
+      units: this.units.map(u => ({ type: u.type, owner: u.owner, q: u.q, r: u.r, hp: u.hp, move: u.move, embarked: !!u.embarked, home: u.home, spreads: u.spreads,
         route: u.route ? { from: [u.route.from.q, u.route.from.r], to: [u.route.to.q, u.route.to.r] } : undefined, legTo: u.legTo })),
       cities: this.cities.map(c => ({ owner: c.owner, q: c.q, r: c.r, name: c.name, population: c.population, food: c.food, production: c.production, hp: c.hp, tiles: [...(c.tiles || [])], districts: [...c.districts], wonders: [...c.wonders], religion: c.religion, borderProgress: c.borderProgress, queue: c.queue, buildings: [...c.buildings] })),
       civs: this.civs.map((v, i) => ({
@@ -1202,6 +1203,7 @@ export class Game {
     for (const ud of data.units) {
       const u = this.spawnUnit(ud.type, ud.owner, ud.q, ud.r);
       u.hp = ud.hp; u.move = ud.move; u.setEmbarked(!!ud.embarked); if (ud.home) u.home = ud.home;
+      if (ud.spreads != null) u.spreads = ud.spreads;
     }
     this.civs.forEach((v, i) => {
       const cd = data.civs[i];
@@ -1416,6 +1418,37 @@ export class Game {
     }
   }
 
+  // Cities a missionary may convert right now: on its own tile or adjacent,
+  // that don't already follow the missionary's religion.
+  spreadTargets(unit) {
+    if (!unit.def.canSpread || (unit.spreads || 0) <= 0) return [];
+    const faith = this.civs[unit.owner].religion;
+    if (!faith) return [];
+    return this.cities.filter(c => distance(c, unit) <= 1 && c.religion !== faith.name);
+  }
+
+  // A missionary converts a city to its founder's religion, spending one charge
+  // and its move for the turn. The unit is consumed when its last charge is used.
+  spreadFaith(unit, city) {
+    if (!unit.def.canSpread) return { ok: false, msg: 'This unit cannot spread faith' };
+    const faith = this.civs[unit.owner].religion;
+    if (!faith) return { ok: false, msg: 'Found a religion first' };
+    if ((unit.spreads || 0) <= 0) return { ok: false, msg: 'No conversions left' };
+    if (unit.move <= 0) return { ok: false, msg: 'No moves left this turn' };
+    if (!city || distance(city, unit) > 1) return { ok: false, msg: 'Move next to a city first' };
+    if (city.religion === faith.name) return { ok: false, msg: `${city.name} already follows ${faith.name}` };
+    const converted = !!city.religion;
+    city.religion = faith.name;
+    unit.spreads -= 1;
+    unit.move = 0;
+    this.events.push(unit.owner === 0
+      ? `${city.name} ${converted ? 'converted to' : 'embraced'} ${faith.name}`
+      : `${this.civs[unit.owner].name} spread ${faith.name} to ${city.name}`);
+    let removed = false;
+    if (unit.spreads <= 0) { this._removeUnit(unit); removed = true; }
+    return { ok: true, removed, religion: faith.name, city };
+  }
+
   // --- trade routes (built by Traders) --------------------------------------
   // Recompute each city's trade yield from its established routes; drop routes
   // whose cities are gone or who are now at war.
@@ -1609,6 +1642,9 @@ export class Game {
     // Production: defend threatened cities first, then expand, build, and arm.
     const myCities = this.cities.filter(c => c.owner === owner);
     const mySettlers = this.units.filter(u => u.owner === owner && u.def.canFound).length;
+    const myMissionaries = this.units.filter(u => u.owner === owner && u.def.canSpread).length;
+    // Worth proselytising only if some foreign city doesn't already follow us.
+    const faithToSpread = civ.religion && this.cities.some(c => c.owner !== owner && c.religion !== civ.religion.name);
     for (const c of myCities) {
       if (c.queue.length) continue;
       const opts = this.buildOptions(owner, c);
@@ -1625,6 +1661,8 @@ export class Game {
         c.queue.push({ kind: 'project', id: SPACESHIP.id, name: SPACESHIP.name, cost: SPACESHIP.cost }); // race for space
       } else if (myCities.length < 3 && mySettlers === 0) {
         c.queue.push(this._aiItem('unit', 'settler'));
+      } else if (faithToSpread && myMissionaries < 1 && (this.turn + c.q) % 4 === 0) {
+        c.queue.push(this._aiItem('unit', 'missionary')); // send out a missionary now and then
       } else if (wonder && (this.turn + c.q) % 2 === 0) { // sometimes chase a wonder
         c.queue.push({ kind: 'wonder', id: wonder.id, name: wonder.name, cost: wonder.cost });
       } else if (building) {
@@ -1651,6 +1689,25 @@ export class Game {
         const tile = this.tiles.get(key(u.q, u.r));
         const crowded = this.cities.some(c => distance(c, u) < 3);
         if (tile && tile.passable && !crowded && !this.cityAt(u.q, u.r)) { this.foundCity(u); continue; }
+      }
+
+      // A Missionary converts an adjacent foreign city, else walks to the
+      // nearest one that doesn't yet follow our faith.
+      if (u.def.canSpread) {
+        const faith = civ.religion;
+        if (faith) {
+          const adjacent = this.spreadTargets(u).filter(c => c.owner !== owner);
+          if (adjacent.length) { this.spreadFaith(u, adjacent.sort((a, b) => distance(u, a) - distance(u, b))[0]); continue; }
+          const goal = this.cities.filter(c => c.owner !== owner && c.religion !== faith.name).sort((a, b) => distance(u, a) - distance(u, b))[0];
+          if (goal) {
+            const opts = this._moveOpts(u);
+            const reach = reachable(this.tiles, u, u.move, this.occupied(u), opts);
+            let pick = null, bestD = Infinity;
+            for (const k of reach.keys()) { const [q, r] = k.split(',').map(Number); const d = distance({ q, r }, goal); if (d < bestD) { bestD = d; pick = k; } }
+            if (pick) { const [q, r] = pick.split(',').map(Number); const path = findPath(this.tiles, u, { q, r }, this.occupied(u), opts); if (path) u.enqueuePath(path, this.view); }
+          }
+        }
+        continue;
       }
 
       // Badly wounded units break off and fall back to the nearest city to heal.

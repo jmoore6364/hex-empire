@@ -14,6 +14,9 @@ export const OWNER_COLOR = [0x3a78d0, 0xd04545, 0x39a86b, 0xd49a2e, 0x9b59b6];
 export const UNIT_TYPES = {
   settler:    { name: 'Settler',     move: 2, sight: 2, hp: 10, cost: 30, canFound: true, build: 'body' },
   trader:     { name: 'Trader',      move: 3, sight: 2, hp: 8,  cost: 24, canTrade: true, build: 'body' },
+  // Religious support unit: convert cities to your faith. Only buildable once
+  // you have founded a religion (`needsReligion`); carries `spreads` charges.
+  missionary: { name: 'Missionary',  move: 3, sight: 2, hp: 8,  cost: 30, canSpread: true, spreads: 2, needsReligion: true, build: 'missionary' },
   warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'robot' },
   scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout',   model: 'robot' },
   archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer' },
@@ -74,6 +77,7 @@ export class Unit {
     this.move = this.def.move;
     this.hp = this.def.hp;
     this.sight = this.def.sight;
+    this.spreads = this.def.spreads || 0;   // remaining faith-conversions (missionary)
     this.waypoints = [];           // queued world positions for animation
     this.embarked = false;         // a land unit currently at sea
     this.mixer = null;             // animation mixer when using a GLTF model
@@ -322,6 +326,21 @@ export class Unit {
           gun.rotation.z = Math.PI / 2; gun.position.set(tx + 0.22, 0.39, bz); g.add(gun);
         }
       }
+    } else if (this.def.build === 'missionary') {
+      // a robed preacher in pale vestments with an owner-colour hood and a
+      // tall staff topped by a glowing relic
+      const robe = new THREE.MeshStandardMaterial({ color: 0xeae6dc, flatShading: true, roughness: 0.9 });
+      const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.27, 0.62, 8), robe);
+      body.position.y = 0.42; g.add(body);
+      const hood = new THREE.Mesh(new THREE.SphereGeometry(0.15, 8, 6), mat);
+      hood.position.y = 0.8; g.add(hood);
+      const sash = new THREE.Mesh(new THREE.BoxGeometry(0.07, 0.52, 0.02), mat);
+      sash.position.set(0, 0.46, 0.21); g.add(sash);
+      const staff = new THREE.Mesh(new THREE.CylinderGeometry(0.02, 0.02, 0.98, 5), trim);
+      staff.position.set(0.24, 0.56, 0); g.add(staff);
+      const relic = new THREE.Mesh(new THREE.SphereGeometry(0.07, 8, 6),
+        new THREE.MeshStandardMaterial({ color: 0xffe08a, emissive: 0xffcf5a, emissiveIntensity: 0.85, roughness: 0.4 }));
+      relic.position.set(0.24, 1.08, 0); g.add(relic);
     } else { // settler — a little wagon
       const cart = new THREE.Mesh(new THREE.BoxGeometry(0.5, 0.3, 0.34), mat);
       cart.position.y = 0.4; g.add(cart);

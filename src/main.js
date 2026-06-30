@@ -718,6 +718,25 @@ function refreshUnitPanel() {
       onClick: () => beginPickTrade(selected),
     });
   }
+  if (selected.owner === 0 && selected.def.canSpread) {
+    const targets = game.spreadTargets(selected);
+    actions.push({
+      label: `✝ Spread Faith (${selected.spreads})`,
+      enabled: selected.move > 0 && targets.length > 0,
+      onClick: () => {
+        const onTile = game.cityAt(selected.q, selected.r);
+        const city = (onTile && targets.includes(onTile)) ? onTile : targets[0];
+        const res = game.spreadFaith(selected, city);
+        if (res.ok) {
+          sound.play('city');
+          ui.toast(`${res.city.name} now follows ${res.religion}`, '#e6d27a');
+          game.income = game.computeIncome(); ui.refreshTopbar(game);
+          if (res.removed) cycleToNextActive(selected);
+          else { reachMap = game.reachableFor(selected); refreshUnitPanel(); drawOverlays(null); }
+        } else ui.toast(res.msg, '#e88');
+      },
+    });
+  }
   actions.push({ label: 'Skip', enabled: true, onClick: () => cycleToNextActive(selected) });
   ui.showUnit(selected, actions);
 }
@@ -983,4 +1002,4 @@ checkGameOver();
 
 // Debug / test handle: lets the headless smoke test (and the browser console)
 // inspect live game and camera state.
-window.__hex = { game, view, ui, camRig, saveGame, healthBars, camera };
+window.__hex = { game, view, ui, camRig, saveGame, healthBars, camera, selectUnit };

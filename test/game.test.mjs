@@ -567,4 +567,75 @@ function foundRival(game, world, owner = 1) {
   check('save/load preserves a pending offer', g2.dealOffers.length === 1 && g2.dealOffers[0].from === 1);
 }
 
+// --- missionaries & spreading faith ---------------------------------------
+// A missionary is only buildable once the civ has founded a religion.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  check('no missionary before a religion is founded', !game.buildOptions(0, cap).some(o => o.id === 'missionary'));
+  cap.buildings.add('monument');
+  game.foundReligion(0, 'tithe', 'Solarism');
+  check('a missionary unlocks once a religion exists', game.buildOptions(0, cap).some(o => o.id === 'missionary'));
+}
+
+// A missionary converts an adjacent foreign city, spending a charge and its move.
+{
+  const { game, world } = makeGame();
+  const cap = foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  game.foundReligion(0, 'tithe', 'Solarism');
+  const rival = foundRival(game, world, 1);
+  const spot = landNear(game, rival.q, rival.r, 1, 1);
+  const miss = game.spawnUnit('missionary', 0, spot.q, spot.r);
+  check('a fresh missionary has its charges', miss.spreads === UNIT_TYPES.missionary.spreads);
+  check('the rival city starts on another faith', rival.religion !== 'Solarism');
+  const res = game.spreadFaith(miss, rival);
+  check('spreadFaith converts the adjacent city', res.ok && rival.religion === 'Solarism');
+  check('spreading spends one charge', miss.spreads === UNIT_TYPES.missionary.spreads - 1);
+  check('spreading ends the unit\'s turn', miss.move === 0);
+}
+
+// The missionary is consumed when its last charge is used.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  game.foundReligion(0, 'tithe', 'Solarism');
+  const a = foundRival(game, world, 1);
+  const b = foundRival(game, world, 2);
+  const miss = game.spawnUnit('missionary', 0, landNear(game, a.q, a.r, 1, 1).q, landNear(game, a.q, a.r, 1, 1).r);
+  miss.spreads = 1;
+  const res = game.spreadFaith(miss, a);
+  check('the missionary is consumed at its last charge', res.removed && !game.units.includes(miss));
+}
+
+// Guards: needs a religion, must be adjacent, can't re-convert your own faith.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  const rival = foundRival(game, world, 1);
+  const far = landNear(game, rival.q, rival.r, 3, 6);
+  const miss = game.spawnUnit('missionary', 0, far.q, far.r);
+  check('cannot spread without a religion', !game.spreadFaith(miss, rival).ok);
+  game.foundReligion(0, 'tithe', 'Solarism');
+  check('cannot spread to a city out of reach', !game.spreadFaith(miss, rival).ok);
+  rival.religion = 'Solarism';
+  const adj = landNear(game, rival.q, rival.r, 1, 1);
+  const m2 = game.spawnUnit('missionary', 0, adj.q, adj.r);
+  check('cannot convert a city already on your faith', !game.spreadFaith(m2, rival).ok);
+  check('spreadTargets excludes same-faith cities', !game.spreadTargets(m2).includes(rival));
+}
+
+// A missionary's remaining charges survive save / load.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  game.foundReligion(0, 'tithe', 'Solarism');
+  const m = game.spawnUnit('missionary', 0, findStartTile(world).q + 1, findStartTile(world).r);
+  m.spreads = 1;
+  const snap = JSON.parse(JSON.stringify(game.serialize()));
+  const { game: g2 } = makeGame();
+  g2.restore(snap);
+  const m2 = g2.units.find(u => u.type === 'missionary');
+  check('save/load preserves missionary charges', m2 && m2.spreads === 1);
+}
+
 done();
