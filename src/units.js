@@ -362,15 +362,16 @@ export class Unit {
     const scale = proto.def.scale * 0.38;
     const find = (anims, name) => name && THREE.AnimationClip.findByName(anims, name);
     // Some models render as a single centred figure (squad:1); others as a
-    // spread triangle of three on the tile.
-    const spots = proto.def.squad === 1 ? [[0, 0]] : [[0, 0.3], [-0.27, -0.16], [0.27, -0.16]];
+    // spread triangle of three on the tile (`spread` widens the triangle).
+    const spr = proto.def.spread || 1;
+    const spots = proto.def.squad === 1 ? [[0, 0]] : [[0, 0.3], [-0.27, -0.16], [0.27, -0.16]].map(([x, z]) => [x * spr, z * spr]);
 
     spots.forEach(([ox, oz], i) => {
       const m = i === 0 ? proto : makeModel(this.def.model);
       const root = m.scene;
       root.scale.setScalar(scale);
       root.position.set(ox, 0, oz);
-      root.rotation.y = i * 2.2;          // each faces a slightly different way
+      root.rotation.y = proto.def.faceSame ? 0 : i * 2.2; // squads either all face forward or fan out
       root.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true; o.frustumCulled = false;
@@ -384,10 +385,12 @@ export class Unit {
       });
       g.add(root);
       const idle = find(m.animations, m.def.idle);
-      // Prefer a named walk clip; `walkAny` falls back to the model's sole clip.
-      const walk = find(m.animations, m.def.walk) || (m.def.walkAny && m.animations[0]) || null;
+      // A model exported in SCENE mode splits its walk across several clips (a
+      // body-bob clip + one per leg); `walkAny` plays them ALL together as the
+      // walk cycle. Otherwise use the single named walk clip.
+      const walks = m.def.walkAny ? m.animations : [find(m.animations, m.def.walk)].filter(Boolean);
       if (idle) { const a = this.mixer.clipAction(idle, root); a.time = i * 0.4; a.play(); this.idleActions.push(a); }
-      if (walk) { const a = this.mixer.clipAction(walk, root); a.time = i * 0.4; this.walkActions.push(a); } // staggered phase
+      for (const clip of walks) { const a = this.mixer.clipAction(clip, root); a.time = i * 0.4; this.walkActions.push(a); } // staggered phase
     });
 
     const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 16),

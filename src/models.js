@@ -15,7 +15,7 @@ const MODELS = {
   // Blender-authored low-poly archer (tools/archer.blend.py). Rendered as a
   // squad of three; `tint` recolours the "Owner" material per civ, `flat` gives
   // the faceted low-poly look, `walkAny` plays its (only) clip as the walk cycle.
-  archer: { url: './vendor/models/archer.glb', scale: 1.4, tint: true, flat: true, walkAny: true },
+  archer: { url: './vendor/models/archer.glb', scale: 1.2, tint: true, flat: true, walkAny: true, spread: 1.35, faceSame: true },
 };
 
 const loaded = {}; // key -> { gltf, def }
