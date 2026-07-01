@@ -18,6 +18,8 @@ import { OWNER_COLOR } from './units.js';
 import { RESOURCES, TRADEABLE } from './resources.js';
 import { Effects } from './effects.js';
 import { HealthBars } from './health.js';
+import { FaithBadges } from './faith.js';
+import { religionColor } from './religions.js';
 import { TreePanel } from './researchui.js';
 import { Sound } from './audio.js';
 import { loadUnitModels } from './models.js';
@@ -27,6 +29,9 @@ import { portraitSVG, portraitFullSVG } from './portraits.js';
 
 // A civ's ruler name+title (falls back to the civ name for pre-portrait saves).
 const rulerOf = (o) => game.civs[o].ruler || (CIV_BY_ID[game.civs[o].id] || {}).ruler || game.civs[o].name;
+
+// A {name, color} tag for a religion, or null — used by the city panel.
+const relTag = (name) => name ? { name, color: '#' + religionColor(name).toString(16).padStart(6, '0') } : null;
 
 const FOG_REF = 30; // fog/shadow frustum sized for the largest map; world radius is chosen in the menu
 
@@ -166,6 +171,8 @@ const game = new Game(scene, view, saveData ? saveData.civs.length : 1 + NUM_AI,
   saveData ? {} : { difficulty: startOpts.difficulty, turnLimit: startOpts.turnLimit });
 game.fx = new Effects(scene);   // combat animations
 const healthBars = new HealthBars(scene);
+const faithBadges = new FaithBadges(scene);
+const faithEntities = [];
 const ui = new UI();
 let researchNudged = false;     // so the "pick a tech" nudge only auto-opens once
 
@@ -296,6 +303,18 @@ function renderDiplomacy() {
     // Active deals with this civ.
     for (const d of game.deals.filter(d => (d.a === 0 && d.b === o) || (d.b === 0 && d.a === o))) {
       h += `<div class="deal-active"><span>${describeDeal(d)} · ${d.turnsLeft}t</span><button class="act end" data-end-deal="${d.id}">End</button></div>`;
+    }
+  }
+  // Faiths of the world: who founded what, and how far it has spread.
+  const faiths = game.religionStats();
+  if (faiths.length) {
+    const mine = game.civs[0].religion && game.civs[0].religion.name;
+    h += '<div class="sec">Faiths</div>';
+    for (const f of faiths) {
+      const col = '#' + religionColor(f.name).toString(16).padStart(6, '0');
+      const founder = f.founder >= 0 ? `<span style="color:${ownerHex(f.founder)}">${game.civs[f.founder].name}</span>` : '—';
+      h += `<div class="row faith-row"><span><span style="color:${col}">◆</span> ${f.name}${f.name === mine ? ' <i style="opacity:.6">(yours)</i>' : ''}</span>` +
+        `<span>${f.cities}🏙 · ${founder}</span></div>`;
     }
   }
   document.getElementById('diplo-body').innerHTML = h || '<div class="row"><span>No rivals remain.</span></div>';
@@ -614,7 +633,7 @@ function selectCity(c) {
 // Build the city-management model + its build/research buttons.
 function refreshCityPanel() {
   const c = selectedCity;
-  if (c.owner !== 0) { ui.showCity({ name: c.name, you: false, population: c.population, growth: { have: Math.floor(c.food), need: c.population * 10 }, defense: { hp: Math.round(c.hp), max: game.cityMaxHp(c) } }); return; }
+  if (c.owner !== 0) { ui.showCity({ name: c.name, you: false, population: c.population, growth: { have: Math.floor(c.food), need: c.population * 10 }, defense: { hp: Math.round(c.hp), max: game.cityMaxHp(c) }, religion: relTag(c.religion) }); return; }
 
   let producing = null;
   const queue = [];
@@ -628,6 +647,7 @@ function refreshCityPanel() {
     name: c.name, you: true, population: c.population,
     growth: { have: Math.floor(c.food), need: c.population * 10 },
     defense: { hp: Math.round(c.hp), max: game.cityMaxHp(c) },
+    religion: relTag(c.religion),
     yields: game.cityYields(c), producing, queue,
     buildings: [...c.buildings].map(id => BUILDINGS[id].name),
   };
@@ -852,7 +872,7 @@ function handleClick(ev) {
   const city = game.cityAt(q, r);
   if (city && game.explored.has(key(q, r))) {
     if (city.owner === 0) selectCity(city);
-    else ui.showCity({ name: city.name, you: false, population: city.population, growth: { have: Math.floor(city.food), need: city.population * 10 }, defense: { hp: Math.round(city.hp), max: game.cityMaxHp(city) } });
+    else ui.showCity({ name: city.name, you: false, population: city.population, growth: { have: Math.floor(city.food), need: city.population * 10 }, defense: { hp: Math.round(city.hp), max: game.cityMaxHp(city) }, religion: relTag(city.religion) });
   } else ui.showTile(tile);
 }
 
@@ -974,6 +994,10 @@ function animate(now) {
   for (const u of game.units) hpEntities.push({ mesh: u.mesh, hp: u.hp, maxHp: u.def.hp, barY: 1.05 });
   for (const c of game.cities) hpEntities.push({ mesh: c.mesh, hp: c.hp, maxHp: game.cityMaxHp(c), barY: 1.5 });
   healthBars.update(hpEntities, camera);
+  // Faith gems over cities that follow a religion.
+  faithEntities.length = 0;
+  for (const c of game.cities) if (c.religion) faithEntities.push({ mesh: c.mesh, color: religionColor(c.religion), y: 1.95 });
+  faithBadges.update(faithEntities, camera, now);
   // Carry out a deferred unit-advance once everything has stopped animating.
   if (advancePending && !sceneIsBusy()) {
     const prev = advancePrev;
@@ -1002,4 +1026,4 @@ checkGameOver();
 
 // Debug / test handle: lets the headless smoke test (and the browser console)
 // inspect live game and camera state.
-window.__hex = { game, view, ui, camRig, saveGame, healthBars, camera, selectUnit };
+window.__hex = { game, view, ui, camRig, saveGame, healthBars, camera, selectUnit, selectCity };

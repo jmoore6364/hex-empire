@@ -1402,6 +1402,23 @@ export class Game {
 
   _religionFounder(name) { return this.civs.findIndex(c => c.religion && c.religion.name === name); }
 
+  // Per-religion tally for the UI: follower cities & population, founder civ,
+  // and the belief. Sorted by reach (most follower cities first).
+  religionStats() {
+    const map = new Map();
+    for (const c of this.cities) {
+      if (!c.religion) continue;
+      let e = map.get(c.religion);
+      if (!e) {
+        const fo = this._religionFounder(c.religion);
+        e = { name: c.religion, cities: 0, pop: 0, founder: fo, belief: fo >= 0 ? this.civs[fo].religion.belief : null };
+        map.set(c.religion, e);
+      }
+      e.cities++; e.pop += c.population;
+    }
+    return [...map.values()].sort((a, b) => b.cities - a.cities);
+  }
+
   // Each turn: faith spreads to nearby unconverted cities, and foreign followers
   // pay their religion's founder a small tithe.
   _processReligion() {

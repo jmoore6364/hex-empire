@@ -9,7 +9,7 @@ import { computeOwnership, ownedTiles, initialClaim, expandClaim } from '../src/
 import { DISTRICTS, buildingDistrict, unlockedDistricts } from '../src/districts.js';
 import { WONDERS, unlockedWonders } from '../src/wonders.js';
 import { GREAT_PEOPLE, gppCost } from '../src/greatpeople.js';
-import { BELIEFS, RELIGION_NAMES } from '../src/religions.js';
+import { BELIEFS, RELIGION_NAMES, RELIGION_COLORS, religionColor } from '../src/religions.js';
 import { cityYields } from '../src/economy.js';
 import { CIVICS, GOVERNMENTS, POLICIES, ERAS as CIVIC_ERAS, canResearch as canCivic, availableCivics, pathTo as civicPath, availableGovernments, availablePolicies } from '../src/civics.js';
 import { RESOURCES, resourcesForTerrain, applyResource } from '../src/resources.js';
@@ -424,6 +424,11 @@ check('a Monument adds flat culture', (() => {
   check('full-body figures are visually distinct per civ', new Set(fulls).size === fulls.length);
   check('full-body gradient ids are namespaced by civ id', CIVILIZATIONS.every((c, i) => fulls[i].includes(`pfg_${c.id}`)));
 }
+
+// --- religion colours ------------------------------------------------------
+check('every named religion maps to its palette colour', RELIGION_NAMES.every((n, i) => religionColor(n) === RELIGION_COLORS[i % RELIGION_COLORS.length]));
+check('religionColor is deterministic for custom names', religionColor('Zzz Cult') === religionColor('Zzz Cult'));
+check('religionColor always returns a 24-bit colour', ['Solarism', 'Made Up', ''].every(n => { const c = religionColor(n); return Number.isInteger(c) && c >= 0 && c <= 0xffffff; }));
 
 console.log(`\n${passed} passed, ${failed} failed`);
 process.exit(failed ? 1 : 0);

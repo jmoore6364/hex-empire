@@ -638,4 +638,19 @@ function foundRival(game, world, owner = 1) {
   check('save/load preserves missionary charges', m2 && m2.spreads === 1);
 }
 
+// religionStats tallies followers and identifies the founder + belief.
+{
+  const { game, world } = makeGame();
+  foundAt(game, 0, findStartTile(world).q, findStartTile(world).r);
+  game.foundReligion(0, 'tithe', 'Solarism'); // founder civ 0; its capital converts
+  check('no stats before anyone follows a second faith', game.religionStats().length === 1);
+  const r1 = foundRival(game, world, 1);
+  r1.religion = 'Solarism'; // a foreign follower joins
+  const sol = game.religionStats().find(s => s.name === 'Solarism');
+  check('religionStats counts every follower city', sol && sol.cities === 2);
+  check('religionStats identifies the founder civ', sol.founder === 0);
+  check('religionStats reports the belief', sol.belief === 'tithe');
+  check('religionStats sorts widest faith first', game.religionStats()[0].name === 'Solarism');
+}
+
 done();
