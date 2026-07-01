@@ -11,6 +11,12 @@ def clear():
     bpy.ops.object.select_all(action='SELECT')
     bpy.ops.object.delete()
 
+# Parent while preserving the child's world transform.
+def parent_keep(child, parent):
+    bpy.context.view_layer.update()
+    child.parent = parent
+    child.matrix_parent_inverse = parent.matrix_world.inverted()
+
 _mats = {}
 def mat(name, rgba, rough=0.85):
     if name in _mats: return _mats[name]
@@ -77,7 +83,7 @@ parts = []
 legL = leg(0.12, OWNER); legR = leg(-0.12, OWNER)
 bootL = cube(0.22, 0.34, 0.16, (0.12, -0.06, 0.08), DARK)
 bootR = cube(0.22, 0.34, 0.16, (-0.12, -0.06, 0.08), DARK)
-bootL.parent = legL; bootR.parent = legR   # boots swing with their leg
+parent_keep(bootL, legL); parent_keep(bootR, legR)   # boots swing with their leg, stay on the foot
 # body
 parts += [cone(0.30, 0.24, 0.30, (0, 0, 0.98), OWNER)]      # tunic skirt
 parts += [cone(0.25, 0.17, 0.6, (0, 0, 1.32), OWNER)]       # torso

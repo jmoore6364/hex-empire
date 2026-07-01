@@ -11,6 +11,13 @@ from mathutils import Matrix
 def clear():
     bpy.ops.object.select_all(action='SELECT'); bpy.ops.object.delete()
 
+# Parent while preserving the child's world transform (so it doesn't jump when
+# the parent is offset/rotated); it still follows the parent for animation.
+def parent_keep(child, parent):
+    bpy.context.view_layer.update()
+    child.parent = parent
+    child.matrix_parent_inverse = parent.matrix_world.inverted()
+
 _mats = {}
 def mat(name, rgba, rough=0.8):
     if name in _mats: return _mats[name]
@@ -53,8 +60,8 @@ WOOD  = mat('Wood',  (0.50, 0.35, 0.19, 1))
 # legs (animated) with boots parented on
 legL = limb(0.09, 0.8, (0.12, 0, 0.86), OWNER, 0.42)
 legR = limb(0.09, 0.8, (-0.12, 0, 0.86), OWNER, 0.42)
-bootL = cube(0.24, 0.36, 0.16, (0.12, -0.06, 0.08), DARK); bootL.parent = legL
-bootR = cube(0.24, 0.36, 0.16, (-0.12, -0.06, 0.08), DARK); bootR.parent = legR
+bootL = cube(0.24, 0.36, 0.16, (0.12, -0.06, 0.08), DARK); parent_keep(bootL, legL)
+bootR = cube(0.24, 0.36, 0.16, (-0.12, -0.06, 0.08), DARK); parent_keep(bootR, legR)
 
 parts = []
 parts += [cone(0.32, 0.26, 0.32, (0, 0, 1.0), OWNER)]        # tunic skirt
@@ -87,7 +94,7 @@ club += [cone(0.07, 0.095, 0.28, (0.26, -0.12, 1.56), WOOD)]                    
 club += [sph(0.095, (0.26, -0.12, 1.72), WOOD)]                                 # rounded top
 for s in club:
     bpy.context.view_layer.objects.active = s; s.select_set(True); bpy.ops.object.shade_flat(); s.select_set(False)
-    s.parent = weaponArm   # swings with the arm
+    parent_keep(s, weaponArm)   # swings with the arm, but stays in the hand
 
 # root empty parents the whole figure
 root = bpy.data.objects.new('Warrior', None); bpy.context.collection.objects.link(root)
