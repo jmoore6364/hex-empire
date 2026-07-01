@@ -16,6 +16,9 @@ const MODELS = {
   // squad of three; `tint` recolours the "Owner" material per civ, `flat` gives
   // the faceted low-poly look, `walkAny` plays its (only) clip as the walk cycle.
   archer: { url: './vendor/models/archer.glb', scale: 1.2, tint: true, flat: true, walkAny: true, spread: 1.35, faceSame: true, faceOffset: Math.PI },
+  // Blender-authored warrior (tools/warrior.blend.py): helmet, shield, and a
+  // blunt wooden club on a "WeaponArm" node the game swings for a melee attack.
+  warrior: { url: './vendor/models/warrior.glb', scale: 1.15, tint: true, flat: true, walkAny: true, spread: 1.35, faceSame: true, faceOffset: Math.PI },
 };
 
 const loaded = {}; // key -> { gltf, def }

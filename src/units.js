@@ -17,7 +17,7 @@ export const UNIT_TYPES = {
   // Religious support unit: convert cities to your faith. Only buildable once
   // you have founded a religion (`needsReligion`); carries `spreads` charges.
   missionary: { name: 'Missionary',  move: 3, sight: 2, hp: 8,  cost: 30, canSpread: true, spreads: 2, needsReligion: true, build: 'missionary' },
-  warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'robot' },
+  warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'warrior' },
   scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout',   model: 'robot' },
   archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer', model: 'archer', volley: 3 },
   // Tech-gated units.
@@ -375,7 +375,9 @@ export class Unit {
       // squads either all face forward or fan out; faceOffset corrects a model
       // whose built-in forward axis differs from the travel-facing convention
       root.rotation.y = (proto.def.faceSame ? 0 : i * 2.2) + (proto.def.faceOffset || 0);
+      let weaponArm = null;
       root.traverse((o) => {
+        if (o.name === 'WeaponArm') weaponArm = o;   // swung by attack('swing')
         if (!o.isMesh) return;
         o.castShadow = true; o.frustumCulled = false;
         if (o.material) {
@@ -387,7 +389,7 @@ export class Unit {
         }
       });
       g.add(root);
-      this.modelFigures.push({ root, phase: i * 2.1 });
+      this.modelFigures.push({ root, phase: i * 2.1, weaponArm, weaponRest: weaponArm ? weaponArm.rotation.x : 0 });
       const idle = find(m.animations, m.def.idle);
       // A model exported in SCENE mode splits its walk across several clips (a
       // body-bob clip + one per leg); `walkAny` plays them ALL together as the
@@ -421,8 +423,11 @@ export class Unit {
 
   get isMoving() { return this.waypoints.length > 0; }
 
-  // Trigger a quick draw-and-loose lean on a model squad (e.g. archers firing).
-  attack() { if (this.modelFigures && this.modelFigures.length) { this._attackT = 0; this._attackDur = 0.42; } }
+  // Trigger an attack flourish on a model squad: 'draw' = archer draw-and-loose
+  // lean; 'swing' = melee overhead club swing on the WeaponArm.
+  attack(kind = 'draw') {
+    if (this.modelFigures && this.modelFigures.length) { this._attackT = 0; this._attackDur = 0.42; this._attackKind = kind; }
+  }
 
   update(dt) {
     const moving = this.waypoints.length > 0;
@@ -449,13 +454,27 @@ export class Unit {
         }
       }
     }
-    // A quick draw-and-loose lean when firing (overlays a backward tilt).
+    // Attack flourish: archers lean back to loose; melee winds up and swings
+    // its club (the WeaponArm) with a small forward body lean.
     if (this._attackT != null && this.modelFigures) {
       this._attackT += dt;
       const p = this._attackT / this._attackDur;
-      const lean = p >= 1 ? 0 : -0.45 * Math.sin(p * Math.PI); // lean back, then settle
-      for (const f of this.modelFigures) f.root.rotation.x = lean;
-      if (p >= 1) this._attackT = null;
+      const done = p >= 1;
+      if (this._attackKind === 'swing') {
+        // 0 -> windup (raise) -> chop through -> back to rest
+        let d;
+        if (p < 0.3) d = -1.3 * (p / 0.3);
+        else if (p < 0.7) d = -1.3 + 1.9 * ((p - 0.3) / 0.4);
+        else d = 0.6 * (1 - (p - 0.7) / 0.3);
+        for (const f of this.modelFigures) {
+          if (f.weaponArm) f.weaponArm.rotation.x = f.weaponRest + (done ? 0 : d);
+          f.root.rotation.x = done ? 0 : 0.18 * Math.sin(p * Math.PI); // slight lunge lean
+        }
+      } else {
+        const lean = done ? 0 : -0.45 * Math.sin(p * Math.PI);
+        for (const f of this.modelFigures) f.root.rotation.x = lean;
+      }
+      if (done) this._attackT = null;
     }
     if (!moving) return;
     const target = this.waypoints[0];
