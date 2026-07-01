@@ -33,27 +33,14 @@ const info = await ev(`(() => {
   const dest = ns[2] || ns[0];
   return JSON.stringify({ usesModel, meshChildren: a0.mesh.children.length, walkActions: a0.walkActions ? a0.walkActions.length : 0, idleActions: a0.idleActions ? a0.idleActions.length : 0 });
 })()`);
-// force the walk cycle to play so the render loop exercises the animation
-await ev(`(() => { const g = window.__hex.game; for (const a of g.units.filter(u => u.type === 'archer')) { a.walkActions.forEach(x => x.reset().setEffectiveWeight(1).play()); a._anim = 'walk'; } return true; })()`);
-await new Promise(r => setTimeout(r, 400));
-// DIAGNOSTIC: does the clip actually move nodes? dump names + sample a node's y over time
-const diag = await ev(`(() => {
-  const g = window.__hex.game; const a = g.units.find(u => u.owner === 0 && u.type === 'archer');
-  const names = []; a.mesh.traverse(o => { if (o.name) names.push(o.name); });
-  const clip = a.walkActions[0] && a.walkActions[0].getClip();
-  const tracks = clip ? clip.tracks.map(t => t.name) : [];
-  // sample a leg-ish node's local position/rotation now
-  let node = null; a.mesh.traverse(o => { if (o.name === 'Cylinder' && !node) node = o; }); // 'Cylinder' == left leg
-  window.__diagNode = node;
-  return JSON.stringify({ names: names.slice(0, 20), tracks: tracks.slice(0, 12), sampleName: node && node.name });
-})()`);
-const y0 = await ev(`(() => { const n = window.__diagNode; return n ? JSON.stringify([n.position.x, n.position.y, n.position.z, n.rotation.x]) : null; })()`);
+// DIAGNOSTIC: idle sway — a STATIONARY archer's model root should bob/lean over time
+await ev(`(() => { const g = window.__hex.game; const a = g.units.find(u => u.owner === 0 && u.type === 'archer'); window.__diagNode = a.mesh.children[0]; return true; })()`);
+const y0 = await ev(`(() => { const n = window.__diagNode; return JSON.stringify([+n.position.y.toFixed(4), +n.rotation.z.toFixed(4)]); })()`);
 await new Promise(r => setTimeout(r, 350));
-const y1 = await ev(`(() => { const n = window.__diagNode; return n ? JSON.stringify([n.position.x, n.position.y, n.position.z, n.rotation.x]) : null; })()`);
-console.log('diag:', diag);
-console.log('sample t0:', y0);
-console.log('sample t1:', y1);
-await new Promise(r => setTimeout(r, 700));
+const y1 = await ev(`(() => { const n = window.__diagNode; return JSON.stringify([+n.position.y.toFixed(4), +n.rotation.z.toFixed(4)]); })()`);
+console.log('idle sway (root posY, rotZ) t0:', y0);
+console.log('idle sway (root posY, rotZ) t1:', y1);
+await new Promise(r => setTimeout(r, 500));
 const r = await rpc(ws, id++, 'Page.captureScreenshot', { format: 'png', clip: { x: 170, y: 150, width: 360, height: 320, scale: 2 } });
 writeFileSync(`${OUT}/archer-ingame.png`, Buffer.from(r.result.data, 'base64'));
 console.log('info:', info);

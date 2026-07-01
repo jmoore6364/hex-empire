@@ -358,6 +358,7 @@ export class Unit {
     this.mixer = new THREE.AnimationMixer(g);
     this.idleActions = [];
     this.walkActions = [];
+    this.modelFigures = [];   // per-figure roots, for a procedural idle sway
     const proto = makeModel(this.def.model);
     const scale = proto.def.scale * 0.38;
     const find = (anims, name) => name && THREE.AnimationClip.findByName(anims, name);
@@ -384,6 +385,7 @@ export class Unit {
         }
       });
       g.add(root);
+      this.modelFigures.push({ root, phase: i * 2.1 });
       const idle = find(m.animations, m.def.idle);
       // A model exported in SCENE mode splits its walk across several clips (a
       // body-bob clip + one per leg); `walkAny` plays them ALL together as the
@@ -418,9 +420,10 @@ export class Unit {
   get isMoving() { return this.waypoints.length > 0; }
 
   update(dt) {
+    const moving = this.waypoints.length > 0;
     if (this.mixer) {
       this.mixer.update(dt);
-      const want = this.waypoints.length ? 'walk' : 'idle';
+      const want = moving ? 'walk' : 'idle';
       if (want !== this._anim && this.idleActions && this.walkActions.length) {
         this._anim = want;
         const tos = want === 'walk' ? this.walkActions : this.idleActions;
@@ -429,12 +432,24 @@ export class Unit {
         froms.forEach((a) => a.fadeOut(0.2));
       }
     }
-    if (!this.waypoints.length) return;
+    // Procedural idle sway for models without a baked idle clip (e.g. the
+    // archer): a gentle breathing bob + lean when standing still.
+    if (this.modelFigures && this.modelFigures.length && !this.idleActions.length) {
+      this._clock = (this._clock || 0) + dt;
+      for (const f of this.modelFigures) {
+        if (moving) { f.root.position.y = 0; f.root.rotation.z = 0; }
+        else {
+          f.root.position.y = (Math.sin(this._clock * 2.1 + f.phase) * 0.5 + 0.5) * 0.03;
+          f.root.rotation.z = Math.sin(this._clock * 1.5 + f.phase) * 0.05;
+        }
+      }
+    }
+    if (!moving) return;
     const target = this.waypoints[0];
     const pos = this.mesh.position;
     const dir = target.clone().sub(pos);
     const dist = dir.length();
-    const step = 6 * dt;
+    const step = 3 * dt;   // tile-to-tile travel speed (halved so the walk reads)
     if (dist <= step || dist < 1e-3) {
       pos.copy(target);
       this.waypoints.shift();
