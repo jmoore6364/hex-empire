@@ -12,6 +12,10 @@ import { clone as cloneSkinned } from '../vendor/jsm/utils/SkeletonUtils.js';
 
 const MODELS = {
   robot: { url: './vendor/models/RobotExpressive.glb', scale: 0.42, idle: 'Idle', walk: 'Walking' },
+  // Blender-authored low-poly archer (tools/archer.blend.py). Static (no clips);
+  // `squad:1` renders one figure, `tint` recolours its "Owner" material per civ,
+  // `flat` gives it the game's faceted low-poly shading.
+  archer: { url: './vendor/models/archer.glb', scale: 2.5, squad: 1, tint: true, flat: true },
 };
 
 const loaded = {}; // key -> { gltf, def }

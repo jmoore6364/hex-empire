@@ -653,4 +653,7 @@ function foundRival(game, world, owner = 1) {
   check('religionStats sorts widest faith first', game.religionStats()[0].name === 'Solarism');
 }
 
+// The Archer points at its Blender model, keeping a procedural build fallback.
+check('archer unit references the archer model + procedural fallback', UNIT_TYPES.archer.model === 'archer' && UNIT_TYPES.archer.build === 'archer');
+
 done();

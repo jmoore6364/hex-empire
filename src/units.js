@@ -19,7 +19,7 @@ export const UNIT_TYPES = {
   missionary: { name: 'Missionary',  move: 3, sight: 2, hp: 8,  cost: 30, canSpread: true, spreads: 2, needsReligion: true, build: 'missionary' },
   warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'robot' },
   scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout',   model: 'robot' },
-  archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer' },
+  archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer', model: 'archer' },
   // Tech-gated units.
   horseman:   { name: 'Horseman',    move: 4, sight: 2, hp: 18, cost: 26, attack: 7,                requires: 'animal_husbandry', build: 'horseman' },
   swordsman:  { name: 'Swordsman',   move: 2, sight: 2, hp: 30, cost: 32, attack: 11,               requires: 'iron_working',     build: 'soldier', model: 'robot' },
@@ -361,7 +361,9 @@ export class Unit {
     const proto = makeModel(this.def.model);
     const scale = proto.def.scale * 0.38;
     const find = (anims, name) => name && THREE.AnimationClip.findByName(anims, name);
-    const spots = [[0, 0.3], [-0.27, -0.16], [0.27, -0.16]]; // spread triangle on the tile
+    // Some models render as a single centred figure (squad:1); others as a
+    // spread triangle of three on the tile.
+    const spots = proto.def.squad === 1 ? [[0, 0]] : [[0, 0.3], [-0.27, -0.16], [0.27, -0.16]];
 
     spots.forEach(([ox, oz], i) => {
       const m = i === 0 ? proto : makeModel(this.def.model);
@@ -369,7 +371,17 @@ export class Unit {
       root.scale.setScalar(scale);
       root.position.set(ox, 0, oz);
       root.rotation.y = i * 2.2;          // each faces a slightly different way
-      root.traverse((o) => { if (o.isMesh) { o.castShadow = true; o.frustumCulled = false; if (o.material) o.material = o.material.clone(); } });
+      root.traverse((o) => {
+        if (!o.isMesh) return;
+        o.castShadow = true; o.frustumCulled = false;
+        if (o.material) {
+          o.material = o.material.clone();
+          if (proto.def.flat) o.material.flatShading = true;
+          // Tint the civ-coloured part ("Owner" material) to this unit's owner.
+          if (proto.def.tint && o.material.name && o.material.name.startsWith('Owner')) o.material.color.setHex(OWNER_COLOR[this.owner]);
+          o.material.needsUpdate = true;
+        }
+      });
       g.add(root);
       const idle = find(m.animations, m.def.idle);
       const walk = find(m.animations, m.def.walk);
