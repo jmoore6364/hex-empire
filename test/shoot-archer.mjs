@@ -33,14 +33,30 @@ const info = await ev(`(() => {
   const dest = ns[2] || ns[0];
   return JSON.stringify({ usesModel, meshChildren: a0.mesh.children.length, walkActions: a0.walkActions ? a0.walkActions.length : 0, idleActions: a0.idleActions ? a0.idleActions.length : 0 });
 })()`);
-// DIAGNOSTIC: idle sway — a STATIONARY archer's model root should bob/lean over time
-await ev(`(() => { const g = window.__hex.game; const a = g.units.find(u => u.owner === 0 && u.type === 'archer'); window.__diagNode = a.mesh.children[0]; return true; })()`);
-const y0 = await ev(`(() => { const n = window.__diagNode; return JSON.stringify([+n.position.y.toFixed(4), +n.rotation.z.toFixed(4)]); })()`);
-await new Promise(r => setTimeout(r, 350));
-const y1 = await ev(`(() => { const n = window.__diagNode; return JSON.stringify([+n.position.y.toFixed(4), +n.rotation.z.toFixed(4)]); })()`);
-console.log('idle sway (root posY, rotZ) t0:', y0);
-console.log('idle sway (root posY, rotZ) t1:', y1);
-await new Promise(r => setTimeout(r, 500));
+// Move an archer several tiles and capture it MID-WALK to check facing.
+const walkInfo = await ev(`(() => {
+  const g = window.__hex.game; const a = g.units.find(u => u.owner === 0 && u.type === 'archer');
+  const dirs = [[1,-1],[1,0],[0,1],[-1,1],[-1,0],[0,-1]];
+  let best = null;
+  for (const [dq,dr] of dirs) {
+    const path = []; let cur = { q: a.q, r: a.r };
+    for (let k = 0; k < 6; k++) { const nq = cur.q+dq, nr = cur.r+dr; const t = g.tiles.get(nq+','+nr); if (t && t.passable && !g.cityAt(nq,nr) && !g.unitAt(nq,nr)) { path.push({ q: nq, r: nr }); cur = { q: nq, r: nr }; } else break; }
+    if (!best || path.length > best.length) best = path;
+  }
+  if (best && best.length) a.enqueuePath(best, window.__hex.view);
+  const top = window.__hex.view.topOf(a.q, a.r); window.__hex.camRig.focus(top.x, top.z, top.y);
+  window.__a = a;
+  return JSON.stringify({ steps: best ? best.length : 0 });
+})()`);
+await new Promise(r => setTimeout(r, 900)); // mid-walk at the new slower speed
+const facing = await ev(`(() => {
+  const a = window.__a; const wp = a.waypoints[0]; if (!wp) return 'arrived';
+  const p = a.mesh.position; const dx = wp.x - p.x, dz = wp.z - p.z;
+  const travel = Math.atan2(dx, dz);
+  return JSON.stringify({ meshRotY: +a.mesh.rotation.y.toFixed(3), travelAng: +travel.toFixed(3), moving: a.waypoints.length });
+})()`);
+console.log('walk setup:', walkInfo);
+console.log('facing:', facing);
 const r = await rpc(ws, id++, 'Page.captureScreenshot', { format: 'png', clip: { x: 170, y: 150, width: 360, height: 320, scale: 2 } });
 writeFileSync(`${OUT}/archer-ingame.png`, Buffer.from(r.result.data, 'base64'));
 console.log('info:', info);

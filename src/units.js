@@ -372,7 +372,9 @@ export class Unit {
       const root = m.scene;
       root.scale.setScalar(scale);
       root.position.set(ox, 0, oz);
-      root.rotation.y = proto.def.faceSame ? 0 : i * 2.2; // squads either all face forward or fan out
+      // squads either all face forward or fan out; faceOffset corrects a model
+      // whose built-in forward axis differs from the travel-facing convention
+      root.rotation.y = (proto.def.faceSame ? 0 : i * 2.2) + (proto.def.faceOffset || 0);
       root.traverse((o) => {
         if (!o.isMesh) return;
         o.castShadow = true; o.frustumCulled = false;
