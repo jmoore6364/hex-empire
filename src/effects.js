@@ -136,7 +136,13 @@ export class Effects {
         if (d.lengthSq() > 1e-6) e.mesh.quaternion.setFromUnitVectors(this._FWD, d.normalize()); // aim along flight
         e.mesh.position.copy(np);
         e.prev.copy(np);
-        if (p >= 1) { this.scene.remove(e.mesh); (e.mesh.userData.mats || []).forEach((m) => m.dispose()); } // shared geo kept
+        // On impact, leave the arrow stuck where it hit, then shrink it away.
+        if (p >= 1) this.active.push({ type: 'stuck', mesh: e.mesh, mats: e.mesh.userData.mats, t: 0, dur: 0.55 });
+      } else if (e.type === 'stuck') {
+        const s = p < 0.65 ? 1 : 1 - (p - 0.65) / 0.35; // hold, then shrink out
+        e.mesh.scale.setScalar(s);
+        e.mesh.position.y -= dt * 0.15;                  // settle a touch
+        if (p >= 1) { this.scene.remove(e.mesh); (e.mats || []).forEach((m) => m.dispose()); }
       } else if (e.type === 'death') {
         const s = 1 - p;
         e.mesh.scale.set(e.scale0.x * s, e.scale0.y * s, e.scale0.z * s);
