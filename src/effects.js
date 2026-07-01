@@ -7,8 +7,25 @@ export class Effects {
   constructor(scene) {
     this.scene = scene;
     this.active = [];
-    this.projGeo = new THREE.SphereGeometry(0.07, 6, 6);
     this.sparkGeo = new THREE.SphereGeometry(0.05, 5, 4);
+    // Arrow parts (shared geometries, tip pointing +Z so it can be aimed).
+    this.arrowShaftGeo = new THREE.CylinderGeometry(0.022, 0.022, 0.52, 5); this.arrowShaftGeo.rotateX(Math.PI / 2);
+    this.arrowHeadGeo = new THREE.ConeGeometry(0.06, 0.17, 6); this.arrowHeadGeo.rotateX(Math.PI / 2);
+    this.arrowTailGeo = new THREE.CylinderGeometry(0.04, 0.04, 0.08, 6); this.arrowTailGeo.rotateX(Math.PI / 2);
+    this.woodMat = new THREE.MeshBasicMaterial({ color: 0x5a3d22 });
+    this.steelMat = new THREE.MeshBasicMaterial({ color: 0xcdd6e0 });
+    this._FWD = new THREE.Vector3(0, 0, 1);
+  }
+
+  // Build a small arrow group (wood shaft, steel head, owner-tinted tail).
+  _makeArrow(color) {
+    const g = new THREE.Group();
+    g.add(new THREE.Mesh(this.arrowShaftGeo, this.woodMat));
+    const head = new THREE.Mesh(this.arrowHeadGeo, this.steelMat); head.position.z = 0.33; g.add(head);
+    const tmat = new THREE.MeshBasicMaterial({ color });
+    const tail = new THREE.Mesh(this.arrowTailGeo, tmat); tail.position.z = -0.24; g.add(tail);
+    g.userData.mats = [tmat];
+    return g;
   }
 
   // Attacker darts toward the defender and back.
@@ -28,14 +45,22 @@ export class Effects {
     if (mats.length) this.active.push({ type: 'flash', mats, t: 0, dur: 0.32 });
   }
 
-  // An arrow/bolt flying from one world position to another, in an arc.
-  projectile(fromPos, toPos, color) {
-    const mesh = new THREE.Mesh(this.projGeo, new THREE.MeshBasicMaterial({ color }));
-    const start = fromPos.clone(); start.y += 0.5;
-    const end = toPos.clone(); end.y += 0.5;
-    mesh.position.copy(start);
-    this.scene.add(mesh);
-    this.active.push({ type: 'proj', mesh, start, end, t: 0, dur: 0.26 });
+  // A volley of `count` arrows flying from one world position to another, in an
+  // arc, each aimed along its flight. Multiple arrows fan out and are staggered.
+  projectile(fromPos, toPos, color, count = 1) {
+    const start0 = fromPos.clone(); start0.y += 0.6;
+    const end0 = toPos.clone(); end0.y += 0.5;
+    const dir = end0.clone().sub(start0); dir.y = 0;
+    const perp = (dir.lengthSq() > 1e-6) ? new THREE.Vector3(-dir.z, 0, dir.x).normalize() : new THREE.Vector3(1, 0, 0);
+    for (let k = 0; k < count; k++) {
+      const off = count > 1 ? (k - (count - 1) / 2) * 0.16 : 0;
+      const start = start0.clone().addScaledVector(perp, off);
+      const end = end0.clone().addScaledVector(perp, off * 0.4);
+      const mesh = this._makeArrow(color);
+      mesh.position.copy(start);
+      this.scene.add(mesh);
+      this.active.push({ type: 'proj', mesh, start, end, prev: start.clone(), t: -k * 0.08, dur: 0.5 });
+    }
   }
 
   // A floating "-N" damage number that drifts up over a hit unit and fades.
@@ -104,9 +129,14 @@ export class Effects {
         for (const { m } of e.mats) m.emissive.setRGB(0.95 * k, 0.12 * k, 0.05 * k);
         if (p >= 1) for (const { m, hex } of e.mats) m.emissive.setHex(hex);
       } else if (e.type === 'proj') {
-        e.mesh.position.lerpVectors(e.start, e.end, p);
-        e.mesh.position.y += Math.sin(p * Math.PI) * 0.6; // arc
-        if (p >= 1) { this.scene.remove(e.mesh); e.mesh.material.dispose(); } // shared geo: keep it
+        const pc = Math.max(0, p);                       // negative t = still nocked at the start
+        const np = new THREE.Vector3().lerpVectors(e.start, e.end, pc);
+        np.y += Math.sin(pc * Math.PI) * 0.6;            // arc
+        const d = np.clone().sub(e.prev);
+        if (d.lengthSq() > 1e-6) e.mesh.quaternion.setFromUnitVectors(this._FWD, d.normalize()); // aim along flight
+        e.mesh.position.copy(np);
+        e.prev.copy(np);
+        if (p >= 1) { this.scene.remove(e.mesh); (e.mesh.userData.mats || []).forEach((m) => m.dispose()); } // shared geo kept
       } else if (e.type === 'death') {
         const s = 1 - p;
         e.mesh.scale.set(e.scale0.x * s, e.scale0.y * s, e.scale0.z * s);

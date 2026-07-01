@@ -19,7 +19,7 @@ export const UNIT_TYPES = {
   missionary: { name: 'Missionary',  move: 3, sight: 2, hp: 8,  cost: 30, canSpread: true, spreads: 2, needsReligion: true, build: 'missionary' },
   warrior:    { name: 'Warrior',     move: 2, sight: 2, hp: 20, cost: 20, attack: 6,                build: 'soldier', model: 'robot' },
   scout:      { name: 'Scout',       move: 4, sight: 3, hp: 10, cost: 16, attack: 2,                build: 'scout',   model: 'robot' },
-  archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer', model: 'archer' },
+  archer:     { name: 'Archer',      move: 2, sight: 2, hp: 14, cost: 24, attack: 5, range: 2,      build: 'archer', model: 'archer', volley: 3 },
   // Tech-gated units.
   horseman:   { name: 'Horseman',    move: 4, sight: 2, hp: 18, cost: 26, attack: 7,                requires: 'animal_husbandry', build: 'horseman' },
   swordsman:  { name: 'Swordsman',   move: 2, sight: 2, hp: 30, cost: 32, attack: 11,               requires: 'iron_working',     build: 'soldier', model: 'robot' },
@@ -421,6 +421,9 @@ export class Unit {
 
   get isMoving() { return this.waypoints.length > 0; }
 
+  // Trigger a quick draw-and-loose lean on a model squad (e.g. archers firing).
+  attack() { if (this.modelFigures && this.modelFigures.length) { this._attackT = 0; this._attackDur = 0.42; } }
+
   update(dt) {
     const moving = this.waypoints.length > 0;
     if (this.mixer) {
@@ -445,6 +448,14 @@ export class Unit {
           f.root.rotation.z = Math.sin(this._clock * 1.5 + f.phase) * 0.05;
         }
       }
+    }
+    // A quick draw-and-loose lean when firing (overlays a backward tilt).
+    if (this._attackT != null && this.modelFigures) {
+      this._attackT += dt;
+      const p = this._attackT / this._attackDur;
+      const lean = p >= 1 ? 0 : -0.45 * Math.sin(p * Math.PI); // lean back, then settle
+      for (const f of this.modelFigures) f.root.rotation.x = lean;
+      if (p >= 1) this._attackT = null;
     }
     if (!moving) return;
     const target = this.waypoints[0];

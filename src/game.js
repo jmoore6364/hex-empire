@@ -312,7 +312,7 @@ export class Game {
 
     // Cosmetic combat animation (skipped in headless/logic contexts).
     if (this.fx) {
-      if (isRanged) this.fx.projectile(attacker.mesh.position, defender.mesh.position, OWNER_COLOR[attacker.owner]);
+      if (isRanged) { this.fx.projectile(attacker.mesh.position, defender.mesh.position, OWNER_COLOR[attacker.owner], attacker.def.volley || 1); attacker.attack && attacker.attack(); }
       else this.fx.lunge(attacker, defender.mesh.position);
       this.fx.flash(defender);
       this.fx.spark(defender.mesh.position);
@@ -356,7 +356,7 @@ export class Game {
     city.hp = Math.max(0, city.hp - dmg);
     unit.move = 0;
     if (this.fx) {
-      if (range > 1 && d > 1) this.fx.projectile(unit.mesh.position, city.mesh.position, OWNER_COLOR[unit.owner]);
+      if (range > 1 && d > 1) { this.fx.projectile(unit.mesh.position, city.mesh.position, OWNER_COLOR[unit.owner], unit.def.volley || 1); unit.attack && unit.attack(); }
       else this.fx.lunge(unit, city.mesh.position);
       this.fx.flash(city);
       this.fx.spark(city.mesh.position);
