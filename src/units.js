@@ -384,9 +384,10 @@ export class Unit {
       });
       g.add(root);
       const idle = find(m.animations, m.def.idle);
-      const walk = find(m.animations, m.def.walk);
+      // Prefer a named walk clip; `walkAny` falls back to the model's sole clip.
+      const walk = find(m.animations, m.def.walk) || (m.def.walkAny && m.animations[0]) || null;
       if (idle) { const a = this.mixer.clipAction(idle, root); a.time = i * 0.4; a.play(); this.idleActions.push(a); }
-      if (walk) this.walkActions.push(this.mixer.clipAction(walk, root));
+      if (walk) { const a = this.mixer.clipAction(walk, root); a.time = i * 0.4; this.walkActions.push(a); } // staggered phase
     });
 
     const disc = new THREE.Mesh(new THREE.CylinderGeometry(0.36, 0.36, 0.05, 16),

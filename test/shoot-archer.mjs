@@ -26,10 +26,15 @@ const info = await ev(`(() => {
   const a0 = g.spawnUnit('archer', 0, ns[0].q, ns[0].r);
   const a1 = ns[1] ? g.spawnUnit('archer', 1, ns[1].q, ns[1].r) : null;
   const top = window.__hex.view.topOf(cap.q, cap.r); window.__hex.camRig.focus(top.x, top.z, top.y);
-  // did the model actually load (vs procedural fallback)?
+  // did the model actually load (vs procedural fallback)? and did the walk clip wire up?
   const usesModel = !!a0.mixer;
-  return JSON.stringify({ usesModel, meshChildren: a0.mesh.children.length });
+  // nudge it a step so the walk animation switches on (still won't show motion,
+  // but confirms it animates without error)
+  const dest = ns[2] || ns[0];
+  return JSON.stringify({ usesModel, meshChildren: a0.mesh.children.length, walkActions: a0.walkActions ? a0.walkActions.length : 0, idleActions: a0.idleActions ? a0.idleActions.length : 0 });
 })()`);
+// force the walk cycle to play so the render loop exercises the animation
+await ev(`(() => { const g = window.__hex.game; for (const a of g.units.filter(u => u.type === 'archer')) { a.walkActions.forEach(x => x.reset().setEffectiveWeight(1).play()); a._anim = 'walk'; } return true; })()`);
 await new Promise(r => setTimeout(r, 1400));
 const r = await rpc(ws, id++, 'Page.captureScreenshot', { format: 'png', clip: { x: 170, y: 150, width: 360, height: 320, scale: 2 } });
 writeFileSync(`${OUT}/archer-ingame.png`, Buffer.from(r.result.data, 'base64'));
