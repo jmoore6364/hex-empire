@@ -45,6 +45,20 @@ def torus(maj, mino, loc, m, rot=(0,0,0)):
     bpy.ops.mesh.primitive_torus_add(major_radius=maj, minor_radius=mino, location=loc, rotation=rot, major_segments=12, minor_segments=6)
     o = bpy.context.active_object; setmat(o, m); return o
 
+def bow(loc, m, thick=0.022):
+    # a C-shaped bow: a Bezier arc (tips near the archer, belly toward the
+    # target) given thickness with a round bevel, converted to a mesh.
+    cu = bpy.data.curves.new('bow', 'CURVE'); cu.dimensions = '3D'
+    cu.bevel_depth = thick; cu.bevel_resolution = 2
+    sp = cu.splines.new('BEZIER'); sp.bezier_points.add(2)
+    pts = [(0, 0.06, 0.40), (0, -0.20, 0.0), (0, 0.06, -0.40)]  # top tip, belly, bottom tip
+    for bp, co in zip(sp.bezier_points, pts):
+        bp.co = co; bp.handle_left_type = 'AUTO'; bp.handle_right_type = 'AUTO'
+    o = bpy.data.objects.new('Bow', cu); bpy.context.collection.objects.link(o)
+    bpy.context.view_layer.objects.active = o; o.select_set(True)
+    bpy.ops.object.convert(target='MESH')
+    o.location = loc; setmat(o, m); return o
+
 clear()
 
 OWNER = mat('Owner', (0.23, 0.47, 0.82, 1))   # tunic — tinted per civ in-game
@@ -78,11 +92,13 @@ for dx in (-0.03, 0.03, 0.0):
 cyl(0.055, 0.5, (0.12, -0.2, 1.32), SKIN, rot=(math.radians(70), 0, 0))   # front (bow) arm
 cyl(0.055, 0.36, (-0.16, 0.06, 1.36), SKIN, rot=(math.radians(-35), 0, 0)) # rear (draw) arm
 
-# the bow: a vertical ring held in front, with a string chord and a nocked arrow
-torus(0.34, 0.028, (0.06, -0.34, 1.18), WOOD, rot=(math.radians(90), 0, 0))
-cyl(0.012, 0.64, (0.06, -0.31, 1.18), DARK)                                 # string
-cyl(0.014, 0.6, (0.06, -0.12, 1.18), WOOD, rot=(math.radians(90), 0, 0))    # arrow shaft
-cone(0.03, 0.0, 0.09, (0.06, -0.44, 1.18), TRIM, rot=(math.radians(-90), 0, 0))  # arrowhead
+# the bow: a C-shaped arc held in front (belly toward the target), a straight
+# bowstring joining the tips, and a nocked arrow resting on the string
+bow((0.06, -0.30, 1.18), WOOD)
+cyl(0.008, 0.80, (0.06, -0.24, 1.18), DARK, verts=6)                          # bowstring (tip-to-tip chord)
+cyl(0.014, 0.46, (0.06, -0.47, 1.18), WOOD, rot=(math.radians(90), 0, 0))     # arrow shaft
+cone(0.028, 0.0, 0.1, (0.06, -0.72, 1.18), TRIM, rot=(math.radians(-90), 0, 0))  # arrowhead
+sph(0.05, (0.06, -0.46, 1.18), SKIN)                                          # bow-hand grip
 
 # faceted low-poly look
 for o in bpy.data.objects:
