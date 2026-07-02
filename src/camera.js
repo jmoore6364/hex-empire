@@ -60,15 +60,22 @@ export class CameraRig {
     window.addEventListener('keyup', (e) => this.keys.delete(e.key.toLowerCase()));
 
     this.dom.addEventListener('contextmenu', (e) => e.preventDefault());
+    // Right-drag orbits (rotate/pitch); left-drag pans the map. A small left
+    // movement still counts as a click for selection (handled in main.js).
     this.dom.addEventListener('mousedown', (e) => {
       if (e.button === 2) { this.dragging = true; this.lastX = e.clientX; this.lastY = e.clientY; }
+      else if (e.button === 0) { this.panMouse = true; this.lastX = e.clientX; this.lastY = e.clientY; }
     });
-    window.addEventListener('mouseup', () => { this.dragging = false; });
+    window.addEventListener('mouseup', () => { this.dragging = false; this.panMouse = false; });
     window.addEventListener('mousemove', (e) => {
-      if (!this.dragging) return;
-      this.yaw -= (e.clientX - this.lastX) * 0.005;
-      this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - this.lastY) * 0.004, 0.35, 1.45);
-      this.lastX = e.clientX; this.lastY = e.clientY;
+      if (this.dragging) {
+        this.yaw -= (e.clientX - this.lastX) * 0.005;
+        this.pitch = THREE.MathUtils.clamp(this.pitch - (e.clientY - this.lastY) * 0.004, 0.35, 1.45);
+        this.lastX = e.clientX; this.lastY = e.clientY;
+      } else if (this.panMouse) {
+        this._panByScreen(e.clientX - this.lastX, e.clientY - this.lastY);
+        this.lastX = e.clientX; this.lastY = e.clientY;
+      }
     });
     // Wheel + trackpad zoom. Proportional to the scroll delta so a notched
     // mouse wheel and a precision trackpad both feel right; ctrlKey marks a
@@ -92,7 +99,10 @@ export class CameraRig {
         this._panLast = { x: e.clientX, y: e.clientY };
         this._panning = false;
       } else if (this.pointers.size === 2) {
-        this._lastPinch = this._pinchDist(); // a second finger turns it into a pinch
+        // a second finger: pinch to zoom, twist to rotate, drag to tilt
+        this._lastPinch = this._pinchDist();
+        this._lastAngle = this._pinchAngle();
+        this._lastMid = this._pinchMid();
         this._panning = false;
       }
     });
@@ -123,6 +133,16 @@ export class CameraRig {
         // Pinch apart (distance grows) zooms in; together zooms out.
         if (this._lastPinch) this._zoomBy((this._lastPinch - dist) * 0.05 * (this.distance / 22));
         this._lastPinch = dist;
+        // Twist the two fingers to orbit (yaw).
+        const ang = this._pinchAngle();
+        let dA = ang - (this._lastAngle != null ? this._lastAngle : ang);
+        if (dA > Math.PI) dA -= 2 * Math.PI; else if (dA < -Math.PI) dA += 2 * Math.PI;
+        this.yaw -= dA;
+        this._lastAngle = ang;
+        // Two-finger vertical drag tilts (pitch).
+        const mid = this._pinchMid();
+        if (this._lastMid) this.pitch = THREE.MathUtils.clamp(this.pitch - (mid.y - this._lastMid.y) * 0.004, 0.35, 1.45);
+        this._lastMid = mid;
         return;
       }
 
@@ -142,6 +162,16 @@ export class CameraRig {
   _pinchDist() {
     const [a, b] = [...this.pointers.values()];
     return Math.hypot(a.x - b.x, a.y - b.y);
+  }
+
+  _pinchAngle() {
+    const [a, b] = [...this.pointers.values()];
+    return Math.atan2(b.y - a.y, b.x - a.x);
+  }
+
+  _pinchMid() {
+    const [a, b] = [...this.pointers.values()];
+    return { x: (a.x + b.x) / 2, y: (a.y + b.y) / 2 };
   }
 
   // Center the camera on a world position (used when selecting a unit). `y` is
